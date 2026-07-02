@@ -1,0 +1,60 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+  namespace: otel-demo
+  labels:
+    app.kubernetes.io/name: frontend
+    app.kubernetes.io/part-of: otel-demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: frontend
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: frontend
+        app.kubernetes.io/part-of: otel-demo
+        scrape: metrics          # selected by the PodMonitor
+      annotations:
+        pyroscope.io/scrape: "true"   # Alloy scrapes pprof -> Pyroscope
+    spec:
+      containers:
+        - name: frontend           # container name becomes Pyroscope service_name
+          image: localhost/otel-demo/frontend:dev
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: http://alloy.observability.svc.cluster.local:4317
+            - name: OTEL_EXPORTER_OTLP_PROTOCOL
+              value: grpc
+            - name: OTEL_EXPORTER_OTLP_INSECURE
+              value: "true"
+            - name: CHECKOUT_URL
+              value: http://checkout.otel-demo.svc.cluster.local:8080
+            - name: CATALOG_URL
+              value: http://catalog.otel-demo.svc.cluster.local:8080
+          readinessProbe:
+            httpGet: { path: /healthz, port: http }
+          resources:
+            requests: { cpu: 25m, memory: 32Mi }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend
+  namespace: otel-demo
+  labels:
+    app.kubernetes.io/name: frontend
+    app.kubernetes.io/part-of: otel-demo
+spec:
+  selector:
+    app.kubernetes.io/name: frontend
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http

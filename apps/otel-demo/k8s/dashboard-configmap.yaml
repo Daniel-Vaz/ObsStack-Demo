@@ -1,0 +1,63 @@
+# Curated RED dashboard for the demo app. The Grafana sidecar (enabled in
+# helm/grafana/values.yaml, searchNamespace: ALL) auto-loads any ConfigMap
+# labelled grafana_dashboard=1, so this needs no change to the Grafana release.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: otel-demo-dashboard
+  namespace: otel-demo
+  labels:
+    grafana_dashboard: "1"
+    app.kubernetes.io/part-of: otel-demo
+data:
+  otel-demo.json: |
+    {
+      "title": "OTel Demo — RED",
+      "uid": "otel-demo-red",
+      "tags": ["otel-demo"],
+      "timezone": "browser",
+      "schemaVersion": 39,
+      "time": { "from": "now-30m", "to": "now" },
+      "refresh": "10s",
+      "panels": [
+        {
+          "type": "timeseries",
+          "title": "Order rate (demo_orders_total)",
+          "datasource": { "type": "prometheus", "uid": "mimir" },
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "sum(rate(demo_orders_total[1m]))",
+              "legendFormat": "orders/s"
+            }
+          ]
+        },
+        {
+          "type": "timeseries",
+          "title": "HTTP request rate by service",
+          "datasource": { "type": "prometheus", "uid": "mimir" },
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "sum by (job) (rate(http_server_request_duration_seconds_count[1m]))",
+              "legendFormat": "{{job}}"
+            }
+          ]
+        },
+        {
+          "type": "timeseries",
+          "title": "p95 request latency by service",
+          "datasource": { "type": "prometheus", "uid": "mimir" },
+          "gridPos": { "h": 8, "w": 24, "x": 0, "y": 8 },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "histogram_quantile(0.95, sum by (job, le) (rate(http_server_request_duration_seconds_bucket[5m])))",
+              "legendFormat": "{{job}}"
+            }
+          ]
+        }
+      ]
+    }

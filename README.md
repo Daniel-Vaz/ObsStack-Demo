@@ -32,11 +32,11 @@ port-forward.
 │ └──┬─────────┘                                      │  logs → Loki             │
 │    │ remote_write                                   │  traces → Tempo          │
 │    ▼                                                ▼  profiles → Pyroscope    │
-│ ┌──────────┐                                 ┌──────────────┐                  │
-│ │  Mimir   │◀── span / service-graph ───────┤ Loki  Tempo  │                   │
-│ │          │    metrics (from Tempo)         │  Pyroscope   │                  │
-│ └────┬─────┘                                 └──────┬───────┘                  │
-│      │              provisioned datasources         │                          │
+│ ┌──────────┐                                 ┌───────────────┐                 │
+│ │  Mimir   │◀── span / service-graph ───────┤ Loki  Tempo    │                 │
+│ │          │    metrics (from Tempo)         │  Pyroscope    │                 │
+│ └────┬─────┘                                 └───────┬───────┘                 │
+│      │              provisioned datasources          │                         │
 │      │                    ┌──────────┐               │                         │
 │      └──────────────────▶ | Grafana  │ ◀────────────┘                         │
 │                           └──────────┘                                         │
@@ -165,10 +165,12 @@ make alertmanager-ui   # -> http://localhost:9093
 ├── Makefile               # orchestration (cluster, deploy, validate, teardown)
 ├── kind/cluster.yaml      # single-node kind cluster + UI port mappings
 ├── helm/<component>/values.yaml   # per-component Helm values (source of truth)
+├── apps/otel-demo/        # OTel-instrumented demo app (own namespace)
 ├── scripts/
 │   ├── lib.sh             # shared shell helpers
 │   ├── validate.sh        # pods Ready + datasource health + UI reachability
-│   └── smoke-test.sh      # end-to-end ingest/query test
+│   ├── smoke-test.sh      # end-to-end ingest/query test (synthetic signals)
+│   └── demo-test.sh       # verify the demo app emits all four signals
 └── docs/obs-architecture.md   # deeper design notes
 ```
 
@@ -178,8 +180,40 @@ Grafana's Tempo datasource is pre-wired for trace → logs, trace → metrics
 (service graph / span metrics), and trace → profiles, so the demo shows the full
 correlated experience out of the box. See [`helm/grafana/values.yaml`](helm/grafana/values.yaml).
 
-## Status
+## Demo application
 
-Structure, values, Makefile, and validation scripts are in place. A concrete demo
-application to generate telemetry is still **TBD**; until one is deployed,
-`make smoke-test` exercises the pipeline with synthetic signals.
+An OpenTelemetry-instrumented demo app ships in
+[`apps/otel-demo/`](apps/otel-demo/). It's a small Go microservices app —
+`loadgen → frontend → {checkout → payment, catalog}` — that generates **all four
+signals** and feeds them into **this stack's own collectors** (no bundled
+collector/backends, unlike the upstream OpenTelemetry demo). It runs in its own
+**`otel-demo`** namespace and requires **no changes to the stack**:
+
+| Signal   | App emits | Stack collects |
+|----------|-----------|----------------|
+| Traces   | OTLP/gRPC → Alloy | Alloy → Tempo |
+| Metrics  | `/metrics` (OTel Prometheus exporter) + `PodMonitor` | Prometheus → remote_write → Mimir |
+| Logs     | `slog` JSON to stdout with a `traceID` field | Alloy pod-log tail → Loki (auto-linked to traces) |
+| Profiles | Go `pprof` + `pyroscope.io/scrape` annotation | Alloy → Pyroscope |
+
+```bash
+make demo        # build images, load into kind, deploy to the otel-demo namespace
+make demo-test   # assert all four signals are flowing end to end
+make demo-clean  # remove the demo (delete its namespace)
+```
+
+Then open Grafana (`http://localhost:3000`, admin/admin) and:
+
+- **Explore → Tempo**: search `service.name=frontend`; open a trace spanning
+  frontend → checkout → payment / catalog, and view the service graph. From a
+  span, follow the pre-wired links to logs, metrics, and profiles.
+- **Explore → Loki**: `{namespace="otel-demo"}`; click a line's `traceID` to jump
+  to its Tempo trace.
+- **Explore → Mimir**: query `demo_orders_total` or
+  `http_server_request_duration_seconds_count`.
+- **Explore → Pyroscope**: flame graph for the `payment` service shows the CPU
+  hot path.
+
+See [`apps/otel-demo/README.md`](apps/otel-demo/README.md) for the instrumentation
+walkthrough. `make smoke-test` still exercises the pipeline with synthetic signals
+independently of the demo app.

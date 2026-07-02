@@ -1,0 +1,21 @@
+# One PodMonitor for all scrapeable demo services (those carrying scrape=metrics).
+# The existing kube-prometheus-stack Prometheus selects PodMonitors in ALL
+# namespaces (podMonitorNamespaceSelector: {}), so this is picked up with no
+# change to the stack; scraped samples are remote-written to Mimir.
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: otel-demo
+  namespace: otel-demo
+  labels:
+    app.kubernetes.io/part-of: otel-demo
+spec:
+  namespaceSelector:
+    matchNames: [otel-demo]
+  selector:
+    matchLabels:
+      scrape: metrics
+  podMetricsEndpoints:
+    - port: http
+      path: /metrics
+      interval: 15s

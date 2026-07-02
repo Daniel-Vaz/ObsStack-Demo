@@ -18,6 +18,15 @@ KIND_CONFIG  := kind/cluster.yaml
 HELM_DIR     := helm
 HELM_TIMEOUT ?= 10m
 
+# ---- Demo application (apps/otel-demo) ----------------------------------------
+# An OTel-instrumented Go microservices app that feeds the stack's own
+# collectors (Alloy for traces/logs/profiles, Prometheus for metrics). It lives
+# in its own namespace and is built into local images loaded straight into kind.
+DEMO_NAMESPACE ?= otel-demo
+DEMO_DIR       := apps/otel-demo
+DEMO_SERVICES  := frontend checkout payment catalog loadgen
+DEMO_TAG       ?= dev
+
 # This environment uses Podman rather than Docker; tell kind to use it.
 # Exported so every recipe shell (kind create/delete/get) inherits it.
 export KIND_EXPERIMENTAL_PROVIDER := podman
@@ -174,3 +183,45 @@ clean: ## Uninstall all helm releases (keep the cluster)
 .PHONY: down
 down: ## Delete the kind cluster
 	@kind delete cluster --name $(CLUSTER_NAME)
+
+# ---- Demo application --------------------------------------------------------
+.PHONY: demo-build demo-load demo-deploy demo demo-test demo-clean
+
+demo-build: ## Build the otel-demo service images with podman
+	@for svc in $(DEMO_SERVICES); do \
+		echo ">> building otel-demo/$$svc:$(DEMO_TAG)"; \
+		podman build --build-arg SERVICE=$$svc \
+			-t otel-demo/$$svc:$(DEMO_TAG) $(DEMO_DIR) || exit 1; \
+	done
+
+demo-load: ## Load the otel-demo images into the kind cluster
+	@for svc in $(DEMO_SERVICES); do \
+		img=otel-demo/$$svc:$(DEMO_TAG); \
+		echo ">> loading $$img into kind"; \
+		if ! kind load docker-image $$img --name $(CLUSTER_NAME) 2>/dev/null; then \
+			echo ">> docker-image load failed, falling back to image-archive"; \
+			tar=$$(mktemp --suffix=.tar); \
+			podman save $$img -o $$tar && \
+			kind load image-archive $$tar --name $(CLUSTER_NAME) && rm -f $$tar; \
+		fi; \
+	done
+
+demo-deploy: ## Deploy the otel-demo app into its own namespace
+	@kubectl apply -f $(DEMO_DIR)/k8s/namespace.yaml
+	@kubectl apply -f $(DEMO_DIR)/k8s/
+	@echo ">> waiting for otel-demo pods to become Ready..."
+	@kubectl wait --for=condition=Ready pods --all -n $(DEMO_NAMESPACE) --timeout=3m
+
+demo: demo-build demo-load demo-deploy ## Build + load + deploy the demo app
+	@echo
+	@echo "Demo app deployed to the '$(DEMO_NAMESPACE)' namespace. Explore it in Grafana:"
+	@echo "  Tempo    : search service.name=frontend"
+	@echo "  Loki     : {namespace=\"$(DEMO_NAMESPACE)\"}  (click traceID -> Tempo)"
+	@echo "  Mimir    : demo_orders_total / http_server_request_duration_seconds_count"
+	@echo "  Pyroscope: process_cpu for service payment"
+
+demo-test: ## Verify the demo app emits all four signals into the stack
+	@NAMESPACE=$(NAMESPACE) DEMO_NAMESPACE=$(DEMO_NAMESPACE) ./scripts/demo-test.sh
+
+demo-clean: ## Remove the demo app (delete its namespace)
+	@kubectl delete namespace $(DEMO_NAMESPACE) --ignore-not-found

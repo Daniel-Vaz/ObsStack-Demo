@@ -1,0 +1,38 @@
+# loadgen is a client only: no Service, no /metrics scrape, no profiling.
+# It still emits client spans (trace roots) and stdout logs.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: loadgen
+  namespace: otel-demo
+  labels:
+    app.kubernetes.io/name: loadgen
+    app.kubernetes.io/part-of: otel-demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: loadgen
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: loadgen
+        app.kubernetes.io/part-of: otel-demo
+    spec:
+      containers:
+        - name: loadgen
+          image: localhost/otel-demo/loadgen:dev
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: http://alloy.observability.svc.cluster.local:4317
+            - name: OTEL_EXPORTER_OTLP_PROTOCOL
+              value: grpc
+            - name: OTEL_EXPORTER_OTLP_INSECURE
+              value: "true"
+            - name: FRONTEND_URL
+              value: http://frontend.otel-demo.svc.cluster.local:8080
+            - name: REQUEST_INTERVAL
+              value: 500ms
+          resources:
+            requests: { cpu: 25m, memory: 32Mi }

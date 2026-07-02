@@ -140,14 +140,39 @@ Metrics collection is described above; Alloy config lives in
   hostPath) before going multi-node.
 - **No persistence for Grafana**: dashboards/datasources are provisioned as code, so the
   Grafana pod is intentionally ephemeral.
-- **Demo app**: TBD. Until one is added, `make smoke-test` validates the pipeline with
-  synthetic signals (a query against each read path + a pushed OTLP trace).
+- **Demo app vs. smoke test**: `make smoke-test` validates the pipeline with synthetic
+  signals independently; the demo app (below) is the real workload.
+
+## Demo application (apps/otel-demo)
+
+An OTel-instrumented Go microservices app (`loadgen → frontend → {checkout → payment,
+catalog}`) lives in [`apps/otel-demo/`](../apps/otel-demo/) in its own **`otel-demo`**
+namespace. It's deliberately designed to feed the *existing* collectors with **zero
+changes to any `helm/*/values.yaml`**:
+
+| Signal   | App emits | Stack path |
+|----------|-----------|-----------|
+| Traces   | OTel SDK, OTLP/gRPC to Alloy (`OTEL_EXPORTER_OTLP_ENDPOINT`) | Alloy `otelcol.receiver.otlp` → Tempo |
+| Metrics  | OTel Prometheus exporter on `/metrics` + a `PodMonitor` | Prometheus scrape → remote_write → Mimir |
+| Logs     | `slog` JSON to stdout with a `traceID` field | Alloy pod-log tail → Loki |
+| Profiles | Go `net/http/pprof` + `pyroscope.io/scrape: "true"` | Alloy `pyroscope.scrape` → Pyroscope |
+
+Two constraints the app respects so the stack stays untouched:
+
+- **Log field spelling**: the trace id is logged as `traceID` (no underscore) to match the
+  Loki datasource `derivedFields` regex in `helm/grafana/values.yaml`, so logs auto-link to
+  traces.
+- **Single container port**: each service serves app routes, `/metrics`, and
+  `/debug/pprof/*` on one port, so Alloy's `discovery.kubernetes` (which infers the scrape
+  address from the declared container port) resolves exactly one Pyroscope target per pod.
+  (If a service ever needed multiple ports, the alternative is a small relabel in Alloy to
+  honour a `pyroscope.io/port` annotation.)
+
+Build/deploy/verify: `make demo`, `make demo-test`, `make demo-clean`. A curated RED
+dashboard ships as a `grafana_dashboard=1` ConfigMap and is auto-loaded by the sidecar.
 
 ## Next steps / ideas
 
-- Add a demo application that emits all four signals (e.g. an OTel-instrumented service
-  with a pprof endpoint) wired to the annotations above.
-- Ship curated Grafana dashboards via `grafana_dashboard=1` ConfigMaps (sidecar is enabled).
 - If you later run on an environment with a routable container network (e.g. rootful
   Podman or a real cluster), a `LoadBalancer` + MetalLB setup could replace the NodePort
   mappings for a more production-like access pattern.
