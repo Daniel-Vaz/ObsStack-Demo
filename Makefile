@@ -26,10 +26,10 @@ DEMO_DIR       := apps/otel-demo
 DEMO_SERVICES  := frontend checkout payment catalog loadgen
 DEMO_TAG       ?= dev
 
-# The frontend ships an interactive web UI for generating telemetry by hand.
-# The loadgen is an *optional* traffic driver: set DEMO_LOADGEN=false to deploy
-# the app without it and drive traffic yourself from the UI at :8080.
-DEMO_LOADGEN   ?= true
+# The frontend ships an interactive web UI for generating telemetry by hand, so
+# by default you drive traffic yourself from the UI at :8080. The loadgen is an
+# *optional* background traffic driver: set DEMO_LOADGEN=true to also deploy it.
+DEMO_LOADGEN   ?= false
 
 # This environment uses Podman rather than Docker; tell kind to use it.
 # Exported so every recipe shell (kind create/delete/get) inherits it.
@@ -222,7 +222,7 @@ demo-load: ## Load the otel-demo images into the kind cluster
 		fi; \
 	done
 
-demo-deploy: ## Deploy the otel-demo app (set DEMO_LOADGEN=false to skip the loadgen)
+demo-deploy: ## Deploy the otel-demo app (set DEMO_LOADGEN=true to also deploy the loadgen)
 	@kubectl apply -f $(DEMO_DIR)/k8s/namespace.yaml
 	@kubectl apply -f $(DEMO_DIR)/k8s/            # core services (non-recursive: skips optional/)
 	@if [ "$(DEMO_LOADGEN)" = "true" ]; then \
@@ -241,7 +241,7 @@ demo: demo-build demo-load demo-deploy ## Build + load + deploy the demo app
 	@echo
 	@echo "Demo app deployed to the '$(DEMO_NAMESPACE)' namespace."
 	@echo "  Web UI   : http://localhost:8080  (place orders / drive load by hand)"
-	@echo "  loadgen  : $(if $(filter true,$(DEMO_LOADGEN)),on,off)  (toggle with DEMO_LOADGEN=false)"
+	@echo "  loadgen  : $(if $(filter true,$(DEMO_LOADGEN)),on,off)  (toggle with DEMO_LOADGEN=true)"
 	@echo "Explore it in Grafana:"
 	@echo "  Tempo    : search service.name=frontend"
 	@echo "  Loki     : {namespace=\"$(DEMO_NAMESPACE)\"}  (click trace_id -> Tempo)"

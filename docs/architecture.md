@@ -166,8 +166,8 @@ Metrics collection is described above; Alloy config lives in
 An OTel-instrumented Go microservices app (`frontend → {checkout → payment,
 catalog}`) lives in [`apps/otel-demo/`](../apps/otel-demo/) in its own **`otel-demo`**
 namespace. The frontend serves an interactive web UI at `http://localhost:8080` for
-driving traffic by hand; an optional `loadgen` (toggle with `DEMO_LOADGEN`) drives it
-in the background. It's deliberately designed to feed the *existing* collectors with
+driving traffic by hand; an optional `loadgen` (off by default, enable with
+`DEMO_LOADGEN=true`) drives it in the background. It's deliberately designed to feed the *existing* collectors with
 **zero changes to any `helm/*/values.yaml`**:
 
 | Signal   | App emits | Stack path |
@@ -188,6 +188,6 @@ Two constraints the app respects so the stack stays untouched:
   (If a service ever needed multiple ports, the alternative is a small relabel in Alloy to
   honour a `pyroscope.io/port` annotation.)
 
-Build/deploy/verify: `make demo` (add `DEMO_LOADGEN=false` to skip the loadgen),
+Build/deploy/verify: `make demo` (add `DEMO_LOADGEN=true` to also run the loadgen),
 `make demo-ui`, `make demo-test`, `make demo-clean`. A curated RED
 dashboard ships as a `grafana_dashboard=1` ConfigMap and is auto-loaded by the sidecar.

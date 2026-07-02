@@ -22,8 +22,9 @@ steady stream from the browser. Each `/order` produces a two-level distributed
 trace with fan-out.
 
 `loadgen` is an **optional** background traffic driver that hits `/order` on a
-timer so the stack always has live telemetry with no interaction. Deploy without
-it (`DEMO_LOADGEN=false`) and generate everything by hand from the UI.
+timer so the stack always has live telemetry with no interaction. It's **off by
+default** — you generate traffic by hand from the UI; set `DEMO_LOADGEN=true` to
+also deploy it.
 
 ### Frontend routes
 
@@ -67,8 +68,8 @@ apps/otel-demo/
 From the repo root (the stack must already be up via `make up`):
 
 ```bash
-make demo                      # build images, load into kind, deploy the app
-make demo DEMO_LOADGEN=false   # same, but without the background loadgen
+make demo                      # build images, load into kind, deploy the app (no loadgen)
+make demo DEMO_LOADGEN=true    # same, but also deploy the background loadgen
 make demo-ui                   # print the web UI URL (http://localhost:8080)
 make demo-test                 # assert all four signals are flowing
 make demo-clean                # delete the otel-demo namespace

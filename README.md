@@ -84,44 +84,11 @@ locally controlled values files under [`helm/`](helm/).
 | Alloy     | `grafana/alloy`  | 1.10.0 | DaemonSet collector (logs/traces/profiles) | — |
 | Headlamp  | `headlamp/headlamp` | 0.43.0 | in-cluster dashboard (cluster-admin, no-login demo mode) | — |
 
-### Metrics: Prometheus, not Alloy
-
-kube-prometheus-stack owns metrics end to end. Its **Prometheus operator** turns
-the ServiceMonitors emitted by each chart (`helm/*/values.yaml`) into scrape
-targets, **kube-state-metrics** and **node-exporter** add cluster/node metrics,
-and Prometheus **remote-writes** every sample to Mimir — which is what Grafana's
-metrics datasource reads from. Prometheus keeps only a 2h local buffer since Mimir is the long-term store.
-The control-plane monitors (kube-controller-manager / scheduler / etcd /
-kube-proxy) are disabled because kind doesn't expose them for scraping.
-
-### A note on Mimir
-
-Mimir has **no** official single-binary/monolithic Helm chart — the only first-party
-chart is `mimir-distributed` (microservices). To honour the "minimal" goal we run it
-at the smallest supported scale: one replica per required component, zone-aware
-replication off, ingest-storage (Kafka) off, and every optional component
-(alertmanager, ruler, caches, overrides-exporter, query-scheduler) disabled. See
-[`helm/mimir/values.yaml`](helm/mimir/values.yaml).
-
-## How telemetry flows through Alloy
-
-Alloy now handles three signals (metrics belong to Prometheus). The pipeline is
-defined in [`helm/alloy/values.yaml`](helm/alloy/values.yaml):
-
-- **Logs** → tails every pod's stdout/stderr via the Kubernetes API, writes to Loki.
-- **Traces** → receives OTLP on `:4317` (gRPC) / `:4318` (HTTP), exports to Tempo.
-- **Profiles** → scrapes pprof of pods annotated `pyroscope.io/scrape: "true"`, writes to Pyroscope.
-
-To send traces from a demo app, point its OTLP exporter at the Alloy service:
-`http://alloy.observability.svc.cluster.local:4318` (HTTP) or `:4317` (gRPC).
 
 ## Exposing the UIs (NodePort + extraPortMappings)
 
-kind ships no cloud provider, and on WSL2 + rootless Podman the container
-network isn't routable from the host — so a `type: LoadBalancer` VIP can't be
-reached from a browser. Instead the web UIs are `type: NodePort` services on
-fixed node ports, and the kind node publishes those ports on the host via
-`extraPortMappings`:
+The web UIs are `type: NodePort` services on fixed node ports, and the 
+kind node publishes those ports on the host via `extraPortMappings`:
 
 | UI           | Service nodePort | Host URL |
 |--------------|------------------|----------|
@@ -140,26 +107,12 @@ Because those mappings are applied at cluster-creation time, **changing them
 requires `make down && make up`**. Alloy's OTLP receiver ports (4317/4318) stay
 cluster-internal — demo apps push to them via the in-cluster Service DNS.
 
-```bash
-make grafana-ui        # -> http://localhost:3000    (admin / admin)
-make alloy-ui          # -> http://localhost:12345
-make prometheus-ui     # -> http://localhost:9090
-make alertmanager-ui   # -> http://localhost:9093
-make headlamp-ui       # -> http://localhost:4466
-```
-
 ### Headlamp: browsing the cluster
 
 [Headlamp](https://github.com/kubernetes-sigs/headlamp) is a lightweight
 Kubernetes dashboard for eyeballing the cluster — pods, deployments, logs, and
 events across the `observability` and `otel-demo` namespaces — without dropping
 to `kubectl`. It's deployed by default with `make up`.
-
-For zero-friction local use it runs with
-`config.unsafeUseServiceAccountToken: true` and a **cluster-admin** binding
-(see [`helm/headlamp/values.yaml`](helm/headlamp/values.yaml)), so the UI opens
-straight in with no token prompt. That means **no per-user auth** — it's fine for
-a throwaway local kind cluster but must never be used on a shared or real one.
 
 ## Layout
 
@@ -178,12 +131,6 @@ a throwaway local kind cluster but must never be used on a shared or real one.
 └── docs/obs-architecture.md   # deeper design notes
 ```
 
-## Cross-signal correlation
-
-Grafana's Tempo datasource is pre-wired for trace → logs, trace → metrics
-(service graph / span metrics), and trace → profiles, so the demo shows the full
-correlated experience out of the box. See [`helm/grafana/values.yaml`](helm/grafana/values.yaml).
-
 ## Demo application
 
 An OpenTelemetry-instrumented demo app ships in
@@ -194,8 +141,9 @@ collector/backends, unlike the upstream OpenTelemetry demo). It runs in its own
 **`otel-demo`** namespace and requires **no changes to the stack**.
 
 The **frontend serves an interactive web UI at `http://localhost:8080`** where
-you place orders and drive load by hand. A **`loadgen`** sidecar is included as
-an *optional* background traffic driver (toggle with `DEMO_LOADGEN`).
+you place orders and drive load by hand — that's the default. A **`loadgen`** is
+included as an *optional* background traffic driver, **off by default**; deploy it
+with `DEMO_LOADGEN=true`.
 
 | Signal   | App emits | Stack collects |
 |----------|-----------|----------------|
@@ -205,8 +153,8 @@ an *optional* background traffic driver (toggle with `DEMO_LOADGEN`).
 | Profiles | Go `pprof` + `pyroscope.io/scrape` annotation | Alloy → Pyroscope |
 
 ```bash
-make demo                      # build images, load into kind, deploy the app
-make demo DEMO_LOADGEN=false   # deploy without the background loadgen
+make demo                      # build images, load into kind, deploy the app (no loadgen)
+make demo DEMO_LOADGEN=true    # also deploy the background loadgen
 make demo-ui                   # print the web UI URL (http://localhost:8080)
 make demo-test                 # assert all four signals are flowing end to end
 make demo-clean                # remove the demo (delete its namespace)
