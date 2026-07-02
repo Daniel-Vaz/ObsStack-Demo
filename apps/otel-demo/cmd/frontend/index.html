@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>otel-demo — traffic console</title>
+  <style>
+    :root {
+      --bg: #0f1117; --panel: #171a21; --border: #262b36;
+      --fg: #e6e9ef; --muted: #8b93a3; --accent: #f46800; --accent2: #3b82f6;
+      --ok: #22c55e; --err: #ef4444; --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; background: var(--bg); color: var(--fg);
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      line-height: 1.5;
+    }
+    header {
+      padding: 20px 24px; border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; gap: 12px;
+    }
+    header h1 { font-size: 18px; margin: 0; font-weight: 600; }
+    header .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--accent); }
+    header .sub { color: var(--muted); font-size: 13px; margin-left: auto; }
+    main { max-width: 900px; margin: 0 auto; padding: 24px; display: grid; gap: 20px; }
+    .card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 18px 20px; }
+    .card h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin: 0 0 14px; }
+    .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+    button {
+      background: var(--accent); color: #fff; border: 0; border-radius: 7px;
+      padding: 9px 16px; font-size: 14px; font-weight: 600; cursor: pointer;
+    }
+    button:hover { filter: brightness(1.08); }
+    button.secondary { background: #23293480; color: var(--fg); border: 1px solid var(--border); }
+    button.toggle.on { background: var(--ok); }
+    button:disabled { opacity: .5; cursor: not-allowed; }
+    input[type=number] {
+      width: 80px; background: var(--bg); border: 1px solid var(--border);
+      color: var(--fg); border-radius: 6px; padding: 8px 10px; font: inherit;
+    }
+    label.inline { color: var(--muted); font-size: 13px; }
+    .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+    .stat { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; }
+    .stat .n { font-size: 26px; font-weight: 700; font-family: var(--mono); }
+    .stat .l { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+    .stat.ok .n { color: var(--ok); }
+    .stat.err .n { color: var(--err); }
+    #log {
+      font-family: var(--mono); font-size: 12.5px; background: var(--bg);
+      border: 1px solid var(--border); border-radius: 8px; padding: 12px;
+      height: 240px; overflow-y: auto; white-space: pre-wrap; word-break: break-word;
+    }
+    #log .line { padding: 1px 0; }
+    #log .t { color: var(--muted); }
+    #log .s2 { color: var(--ok); }
+    #log .s5 { color: var(--err); }
+    a { color: var(--accent2); }
+    footer { color: var(--muted); font-size: 12px; text-align: center; padding: 0 24px 28px; }
+  </style>
+</head>
+<body>
+  <header>
+    <span class="dot"></span>
+    <h1>otel-demo · traffic console</h1>
+    <span class="sub">drive the frontend by hand → metrics · traces · logs · profiles</span>
+  </header>
+
+  <main>
+    <div class="card">
+      <h2>Generate telemetry</h2>
+      <div class="row">
+        <button id="order">Place order</button>
+        <button id="browse" class="secondary">Browse catalog</button>
+        <span style="width:12px"></span>
+        <label class="inline">burst</label>
+        <input id="burstN" type="number" min="1" max="500" value="25" />
+        <button id="burst" class="secondary">Send burst</button>
+        <span style="width:12px"></span>
+        <label class="inline">every</label>
+        <input id="autoMs" type="number" min="50" max="10000" step="50" value="500" />
+        <label class="inline">ms</label>
+        <button id="auto" class="toggle secondary">Auto load: off</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>This session</h2>
+      <div class="stats">
+        <div class="stat"><div class="n" id="cSent">0</div><div class="l">requests</div></div>
+        <div class="stat ok"><div class="n" id="cOk">0</div><div class="l">2xx</div></div>
+        <div class="stat err"><div class="n" id="cErr">0</div><div class="l">errors</div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Response log</h2>
+      <div id="log"></div>
+      <div class="row" style="margin-top:12px">
+        <button id="clear" class="secondary">Clear</button>
+      </div>
+    </div>
+  </main>
+
+  <footer>
+    Each order fans out <code>frontend → checkout → payment</code> and <code>frontend → catalog</code>.
+    Explore the resulting signals in <a href="http://localhost:3000" target="_blank" rel="noreferrer">Grafana</a>.
+  </footer>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    let sent = 0, ok = 0, err = 0, autoTimer = null;
+
+    function bump() { $('cSent').textContent = sent; $('cOk').textContent = ok; $('cErr').textContent = err; }
+    function stamp() { return new Date().toLocaleTimeString(); }
+
+    function logLine(status, text) {
+      const el = document.createElement('div');
+      el.className = 'line';
+      const cls = status >= 200 && status < 300 ? 's2' : 's5';
+      el.innerHTML = `<span class="t">${stamp()}</span> <span class="${cls}">${status || 'ERR'}</span> ${text}`;
+      const log = $('log');
+      log.appendChild(el);
+      log.scrollTop = log.scrollHeight;
+      while (log.childElementCount > 300) log.removeChild(log.firstChild);
+    }
+
+    async function hit(path) {
+      sent++;
+      try {
+        const res = await fetch(path, { cache: 'no-store' });
+        const body = (await res.text()).trim();
+        if (res.ok) ok++; else err++;
+        logLine(res.status, `${path} — ${body}`);
+      } catch (e) {
+        err++;
+        logLine(0, `${path} — ${e}`);
+      }
+      bump();
+    }
+
+    $('order').onclick = () => hit('/order');
+    $('browse').onclick = () => hit('/catalog');
+
+    $('burst').onclick = async () => {
+      const n = Math.max(1, Math.min(500, parseInt($('burstN').value, 10) || 1));
+      $('burst').disabled = true;
+      for (let i = 0; i < n; i++) await hit('/order');
+      $('burst').disabled = false;
+    };
+
+    $('auto').onclick = () => {
+      const btn = $('auto');
+      if (autoTimer) {
+        clearInterval(autoTimer); autoTimer = null;
+        btn.classList.remove('on'); btn.textContent = 'Auto load: off';
+      } else {
+        const ms = Math.max(50, parseInt($('autoMs').value, 10) || 500);
+        autoTimer = setInterval(() => hit('/order'), ms);
+        btn.classList.add('on'); btn.textContent = 'Auto load: on';
+      }
+    };
+
+    $('clear').onclick = () => { $('log').innerHTML = ''; };
+  </script>
+</body>
+</html>

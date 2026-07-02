@@ -6,9 +6,9 @@
 //	logs     -> slog JSON to stdout (tailed by Alloy) -> Loki
 //	profiles -> net/http/pprof, scraped by Alloy -> Pyroscope  (see internal/httpx)
 //
-// The logger injects the active span's trace id under the key "traceID" (no
-// underscore) so Grafana's Loki datasource derived-field regex links each log
-// line to its Tempo trace out of the box.
+// The logger injects the active span's trace id under the key "trace_id" so
+// Grafana's Loki datasource links each log line to its Tempo trace out of the
+// box (Alloy also promotes it to structured metadata under the same name).
 package telemetry
 
 import (
@@ -96,11 +96,11 @@ func Init(ctx context.Context, serviceName string) (*Providers, error) {
 }
 
 // Log returns the default logger enriched with the trace/span ids from ctx, so
-// every line correlates to its Tempo trace via the "traceID" derived field.
+// every line correlates to its Tempo trace via the "trace_id" field.
 func Log(ctx context.Context) *slog.Logger {
 	l := slog.Default()
 	if sc := trace.SpanContextFromContext(ctx); sc.HasTraceID() {
-		l = l.With("traceID", sc.TraceID().String(), "spanID", sc.SpanID().String())
+		l = l.With("trace_id", sc.TraceID().String(), "span_id", sc.SpanID().String())
 	}
 	return l
 }

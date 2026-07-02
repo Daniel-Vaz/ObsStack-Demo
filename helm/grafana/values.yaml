@@ -40,10 +40,10 @@ datasources:
         access: proxy
         url: http://loki.observability.svc.cluster.local:3100
         jsonData:
-          # Turn a "traceID" field in logs into a link to the Tempo trace.
+          # Turn a "trace_id" field in logs into a link to the Tempo trace.
           derivedFields:
-            - name: TraceID
-              matcherRegex: '"?tracee?[iI][dD]"?[:=]"?(\w+)"?'
+            - name: trace_id
+              matcherRegex: '"?trace_id"?[:=]"?(\w+)"?'
               datasourceUid: tempo
               url: '$${__value.raw}'
 

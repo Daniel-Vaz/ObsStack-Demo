@@ -20,7 +20,7 @@ else
 fi
 
 info "Checking helm releases are deployed..."
-for r in kube-prometheus-stack mimir loki tempo pyroscope grafana alloy; do
+for r in kube-prometheus-stack mimir loki tempo pyroscope grafana alloy headlamp; do
   status="$(helm status "$r" -n "$NAMESPACE" -o json 2>/dev/null | grep -o '"status":"[^"]*"' | head -1)"
   if [[ "$status" == *deployed* ]]; then pass "release $r deployed"; else warn "release $r not deployed ($status)"; fi
 done
@@ -50,7 +50,7 @@ if ! with_port_forward svc/grafana 80 -- grafana_datasource_health; then
 fi
 
 info "Checking the NodePort-exposed UIs are reachable on the host..."
-for entry in "grafana:3000" "alloy:12345" "prometheus:9090" "alertmanager:9093"; do
+for entry in "grafana:3000" "alloy:12345" "prometheus:9090" "alertmanager:9093" "headlamp:4466"; do
   svc="${entry%%:*}"; port="${entry##*:}"
   if curl -s -o /dev/null --max-time 5 "http://localhost:${port}"; then
     pass "$svc UI reachable at http://localhost:${port}"

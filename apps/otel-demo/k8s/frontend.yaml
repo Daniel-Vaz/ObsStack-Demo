@@ -51,10 +51,15 @@ metadata:
   labels:
     app.kubernetes.io/name: frontend
     app.kubernetes.io/part-of: otel-demo
+# NodePort so the interactive web UI is reachable from the host without a
+# port-forward: kind publishes nodePort 30080 on the host as :8080 (see
+# kind/cluster.yaml). This mirrors how the stack's own UIs are exposed.
 spec:
+  type: NodePort
   selector:
     app.kubernetes.io/name: frontend
   ports:
     - name: http
       port: 8080
       targetPort: http
+      nodePort: 30080

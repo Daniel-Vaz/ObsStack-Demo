@@ -85,7 +85,30 @@ alloy:
 
       loki.source.kubernetes "pods" {
         targets    = discovery.relabel.logs_pods.output
+        forward_to = [loki.process.trace_ids.receiver]
+      }
+
+      // Parse the slog JSON body and promote the trace/span ids to structured
+      // metadata. Grafana's Loki<->Tempo correlation looks for `trace_id`
+      // (and `span_id`), which is exactly what the app logs. Structured metadata
+      // keeps these high-cardinality values queryable without indexing them as
+      // stream labels.
+      loki.process "trace_ids" {
         forward_to = [loki.write.default.receiver]
+
+        stage.json {
+          expressions = {
+            trace_id = "trace_id",
+            span_id  = "span_id",
+          }
+        }
+
+        stage.structured_metadata {
+          values = {
+            trace_id = "trace_id",
+            span_id  = "span_id",
+          }
+        }
       }
 
       loki.write "default" {

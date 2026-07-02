@@ -1,9 +1,11 @@
-// frontend is the entry point of the demo app. Each request fans out to
-// checkout and catalog, producing a two-level distributed trace.
+// frontend is the entry point of the demo app. It serves an interactive web UI
+// (index.html) for driving traffic by hand and the /order route that fans out
+// to checkout and catalog, producing a two-level distributed trace.
 package main
 
 import (
 	"context"
+	_ "embed"
 	"fmt"
 	"net/http"
 	"os"
@@ -15,6 +17,12 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 )
+
+// index.html is the interactive traffic console served at "/". Embedding it
+// keeps the image a single static binary with no runtime asset dependencies.
+//
+//go:embed index.html
+var indexHTML []byte
 
 func main() {
 	ctx := context.Background()
@@ -35,7 +43,22 @@ func main() {
 	}
 
 	mux := httpx.NewMux()
-	httpx.Handle(mux, "/", "GET /", func(w http.ResponseWriter, r *http.Request) {
+
+	// Web UI: a small interactive page for generating traffic by hand, so the
+	// stack has live telemetry even when the loadgen is not deployed. Served
+	// unwrapped (no server span) — page loads aren't part of the order flow.
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write(indexHTML)
+	})
+
+	// Place an order: fan out to catalog + checkout. This is the traced
+	// business flow the loadgen and the UI's "Place order" button both drive.
+	httpx.Handle(mux, "/order", "GET /order", func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 
 		cat, err := httpx.Get(ctx, client, catalogURL+"/products")
@@ -51,9 +74,24 @@ func main() {
 			return
 		}
 
-		orders.Add(ctx, 1, metric.WithAttributes(attribute.String("route", "/")))
+		orders.Add(ctx, 1, metric.WithAttributes(attribute.String("route", "/order")))
 		telemetry.Log(ctx).Info("order placed", "catalog", cat, "checkout", out)
 		fmt.Fprintf(w, "order ok: %s | %s\n", cat, out)
+	})
+
+	// Browse the catalog only: a lighter call that skips checkout/payment, so
+	// the UI can produce a shorter trace shape too.
+	httpx.Handle(mux, "/catalog", "GET /catalog", func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+
+		cat, err := httpx.Get(ctx, client, catalogURL+"/products")
+		if err != nil {
+			telemetry.Log(ctx).Error("catalog call failed", "err", err)
+			http.Error(w, "catalog unavailable", http.StatusBadGateway)
+			return
+		}
+		telemetry.Log(ctx).Info("catalog browsed", "catalog", cat)
+		fmt.Fprintf(w, "catalog: %s\n", cat)
 	})
 
 	telemetry.Log(ctx).Info("frontend listening", "addr", ":8080",

@@ -32,7 +32,7 @@ func main() {
 	defer ticker.Stop()
 	for range ticker.C {
 		reqCtx, span := tracer.Start(ctx, "place-order")
-		if _, err := httpx.Get(reqCtx, client, frontendURL+"/"); err != nil {
+		if _, err := httpx.Get(reqCtx, client, frontendURL+"/order"); err != nil {
 			telemetry.Log(reqCtx).Warn("request failed", "err", err)
 		}
 		span.End()

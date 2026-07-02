@@ -1,8 +1,7 @@
 # =============================================================================
-#  Grafana LGTM stack demo on kind
+#  Observability demo on kind
 #
-#  Quick start:   make up          # cluster + full stack + Alloy + validate
-#                 make grafana-ui  # print the Grafana URL (http://localhost:3000)
+#  Quick start:   make up          # cluster + full stack + Alloy + validate + demo app
 #                 make down        # tear the cluster down
 #
 #  Run `make help` for the full list of targets.
@@ -12,7 +11,7 @@ SHELL := /usr/bin/env bash
 .DEFAULT_GOAL := help
 
 # ---- Configuration -----------------------------------------------------------
-CLUSTER_NAME ?= grafana-lgtm-demo
+CLUSTER_NAME ?= observability-demo
 NAMESPACE    ?= observability
 KIND_CONFIG  := kind/cluster.yaml
 HELM_DIR     := helm
@@ -27,6 +26,11 @@ DEMO_DIR       := apps/otel-demo
 DEMO_SERVICES  := frontend checkout payment catalog loadgen
 DEMO_TAG       ?= dev
 
+# The frontend ships an interactive web UI for generating telemetry by hand.
+# The loadgen is an *optional* traffic driver: set DEMO_LOADGEN=false to deploy
+# the app without it and drive traffic yourself from the UI at :8080.
+DEMO_LOADGEN   ?= true
+
 # This environment uses Podman rather than Docker; tell kind to use it.
 # Exported so every recipe shell (kind create/delete/get) inherits it.
 export KIND_EXPERIMENTAL_PROVIDER := podman
@@ -39,7 +43,8 @@ TEMPO_VERSION     := 2.2.3
 PYROSCOPE_VERSION := 2.1.0
 GRAFANA_VERSION   := 12.7.2
 ALLOY_VERSION     := 1.10.0
-KPS_VERSION       := 87.5.1   # prometheus-community/kube-prometheus-stack
+KPS_VERSION       := 87.5.1
+HEADLAMP_VERSION  := 0.43.0
 
 # Common helm install invocation.
 # Retries because Helm v4's kstatus waiter aborts on the first transient
@@ -94,7 +99,8 @@ repos: ## Add and update the Grafana + Prometheus helm repos
 	@helm repo add grafana https://grafana.github.io/helm-charts >/dev/null
 	@helm repo add grafana-community https://grafana-community.github.io/helm-charts >/dev/null
 	@helm repo add prometheus-community https://prometheus-community.github.io/helm-charts >/dev/null
-	@helm repo update grafana grafana-community prometheus-community >/dev/null
+	@helm repo add headlamp https://kubernetes-sigs.github.io/headlamp/ >/dev/null
+	@helm repo update grafana grafana-community prometheus-community headlamp >/dev/null
 	@echo "Helm repos up to date."
 
 .PHONY: namespace
@@ -102,7 +108,7 @@ namespace: ## Ensure the target namespace exists
 	@kubectl get namespace $(NAMESPACE) >/dev/null 2>&1 || kubectl create namespace $(NAMESPACE)
 
 # ---- Individual component deploys --------------------------------------------
-.PHONY: kube-prometheus-stack mimir loki tempo pyroscope grafana alloy
+.PHONY: kube-prometheus-stack mimir loki tempo pyroscope grafana alloy headlamp
 
 kube-prometheus-stack: repos namespace ## Deploy kube-prometheus-stack (Prometheus, Alertmanager, operator, KSM, node-exporter)
 	$(call helm_install,kube-prometheus-stack,prometheus-community/kube-prometheus-stack,$(KPS_VERSION))
@@ -125,17 +131,20 @@ grafana: repos namespace ## Deploy Grafana (with provisioned datasources)
 alloy: repos namespace ## Deploy Alloy (telemetry collector)
 	$(call helm_install,alloy,grafana/alloy,$(ALLOY_VERSION))
 
+headlamp: repos namespace ## Deploy Headlamp (cluster web UI)
+	$(call helm_install,headlamp,headlamp/headlamp,$(HEADLAMP_VERSION))
+
 # ---- Grouped deploys ---------------------------------------------------------
 .PHONY: backends stack
 backends: mimir loki tempo pyroscope ## Deploy the four LGTM backends
 # kube-prometheus-stack goes first: it installs the Prometheus-operator CRDs
 # (ServiceMonitor, ...) that every other chart's values now reference.
-stack: kube-prometheus-stack backends grafana ## Deploy Prometheus stack + backends + Grafana
+stack: kube-prometheus-stack backends grafana headlamp ## Deploy Prometheus stack + backends + Grafana + Headlamp
 
 .PHONY: up
-up: cluster stack alloy validate ## Full setup: cluster + stack + Alloy + validate
+up: cluster stack alloy validate demo ## Full setup: cluster + stack + Alloy + validate + demo app
 	@echo
-	@echo "Done. Grafana http://localhost:3000 (admin/admin) · Alloy http://localhost:12345 · Prometheus http://localhost:9090 · Alertmanager http://localhost:9093."
+	@echo "Done. Grafana http://localhost:3000 (admin/admin) · Alloy http://localhost:12345 · Prometheus http://localhost:9090 · Alertmanager http://localhost:9093 · Headlamp http://localhost:4466 · Demo UI http://localhost:8080."
 
 # ---- Validation & tests ------------------------------------------------------
 .PHONY: status
@@ -146,10 +155,6 @@ status: ## Show pods and helm releases in the namespace
 .PHONY: validate
 validate: ## Check that all workloads are ready and datasources are healthy
 	@NAMESPACE=$(NAMESPACE) ./scripts/validate.sh
-
-.PHONY: smoke-test
-smoke-test: ## Push synthetic telemetry through Alloy and query it back
-	@NAMESPACE=$(NAMESPACE) ./scripts/smoke-test.sh
 
 # ---- Access helpers ----------------------------------------------------------
 .PHONY: grafana-ui
@@ -168,6 +173,17 @@ prometheus-ui: ## Show the Prometheus UI URL
 alertmanager-ui: ## Show the Alertmanager UI URL
 	@echo "Alertmanager at http://localhost:9093."
 
+.PHONY: headlamp-ui
+headlamp-ui: ## Show the Headlamp UI URL
+	@echo "Headlamp at http://localhost:4466 (opens straight in — no token required)."
+
+.PHONY: demo-ui
+demo-ui: ## Show the demo app's web UI URL (or port-forward on older clusters)
+	@echo "otel-demo web UI at http://localhost:8080."
+	@echo "If the page doesn't load, this cluster predates the :8080 port mapping;"
+	@echo "recreate it with 'make down && make up', or run:"
+	@echo "  kubectl port-forward -n $(DEMO_NAMESPACE) svc/frontend 8080:8080"
+
 .PHONY: logs-alloy
 logs-alloy: ## Tail Alloy logs
 	@kubectl logs -n $(NAMESPACE) -l app.kubernetes.io/name=alloy -f --max-log-requests 10
@@ -175,7 +191,7 @@ logs-alloy: ## Tail Alloy logs
 # ---- Teardown ----------------------------------------------------------------
 .PHONY: clean
 clean: ## Uninstall all helm releases (keep the cluster)
-	-@for r in alloy grafana pyroscope tempo loki mimir kube-prometheus-stack; do \
+	-@for r in headlamp alloy grafana pyroscope tempo loki mimir kube-prometheus-stack; do \
 		helm uninstall $$r -n $(NAMESPACE) 2>/dev/null || true; \
 	done
 	@echo "Releases removed. (Prometheus-operator CRDs are left in place; kind delete removes them.)"
@@ -206,17 +222,29 @@ demo-load: ## Load the otel-demo images into the kind cluster
 		fi; \
 	done
 
-demo-deploy: ## Deploy the otel-demo app into its own namespace
+demo-deploy: ## Deploy the otel-demo app (set DEMO_LOADGEN=false to skip the loadgen)
 	@kubectl apply -f $(DEMO_DIR)/k8s/namespace.yaml
-	@kubectl apply -f $(DEMO_DIR)/k8s/
-	@echo ">> waiting for otel-demo pods to become Ready..."
-	@kubectl wait --for=condition=Ready pods --all -n $(DEMO_NAMESPACE) --timeout=3m
+	@kubectl apply -f $(DEMO_DIR)/k8s/            # core services (non-recursive: skips optional/)
+	@if [ "$(DEMO_LOADGEN)" = "true" ]; then \
+		echo ">> loadgen: enabled (DEMO_LOADGEN=true)"; \
+		kubectl apply -f $(DEMO_DIR)/k8s/optional/loadgen.yaml; \
+	else \
+		echo ">> loadgen: disabled (DEMO_LOADGEN=$(DEMO_LOADGEN)) — drive traffic from the web UI at :8080"; \
+		kubectl delete -f $(DEMO_DIR)/k8s/optional/loadgen.yaml --ignore-not-found; \
+	fi
+	@echo ">> waiting for otel-demo deployments to become Available..."
+	@# Wait on Deployments (not `pods --all`): a just-disabled loadgen leaves a
+	@# terminating pod that `pods --all` would block on until timeout.
+	@kubectl wait --for=condition=Available deploy --all -n $(DEMO_NAMESPACE) --timeout=3m
 
 demo: demo-build demo-load demo-deploy ## Build + load + deploy the demo app
 	@echo
-	@echo "Demo app deployed to the '$(DEMO_NAMESPACE)' namespace. Explore it in Grafana:"
+	@echo "Demo app deployed to the '$(DEMO_NAMESPACE)' namespace."
+	@echo "  Web UI   : http://localhost:8080  (place orders / drive load by hand)"
+	@echo "  loadgen  : $(if $(filter true,$(DEMO_LOADGEN)),on,off)  (toggle with DEMO_LOADGEN=false)"
+	@echo "Explore it in Grafana:"
 	@echo "  Tempo    : search service.name=frontend"
-	@echo "  Loki     : {namespace=\"$(DEMO_NAMESPACE)\"}  (click traceID -> Tempo)"
+	@echo "  Loki     : {namespace=\"$(DEMO_NAMESPACE)\"}  (click trace_id -> Tempo)"
 	@echo "  Mimir    : demo_orders_total / http_server_request_duration_seconds_count"
 	@echo "  Pyroscope: process_cpu for service payment"
 

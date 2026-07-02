@@ -1,0 +1,36 @@
+# Headlamp — a web UI for browsing and managing the kind cluster.
+#
+# A lightweight Kubernetes dashboard (https://github.com/kubernetes-sigs/headlamp)
+# for eyeballing the demo: pods, deployments, logs, events across the
+# observability + otel-demo namespaces, without dropping to kubectl.
+#
+# Reach the UI with `make headlamp-ui` at http://localhost:4466.
+
+config:
+  # In-cluster mode: Headlamp talks to the API server via its own ServiceAccount.
+  inCluster: true
+
+  # DEMO ONLY — authenticate every visitor as the pod's ServiceAccount so the UI
+  # opens straight to the cluster with no token prompt. Combined with the
+  # cluster-admin binding below this makes it read/write cluster-admin, which is
+  # fine for a throwaway local kind cluster but must never be used on a real one
+  # (there's no per-user auth). Drop this + add OIDC/an auth proxy for anything
+  # shared.
+  unsafeUseServiceAccountToken: true
+
+# Bind Headlamp's ServiceAccount to cluster-admin so it can read every resource
+# the UI surfaces. (chart default, made explicit for the demo.)
+clusterRoleBinding:
+  create: true
+  clusterRoleName: cluster-admin
+
+# Exposed to the host as a NodePort. The kind node maps hostPort 4466 ->
+# containerPort 30466 (see kind/cluster.yaml extraPortMappings), so the UI is
+# reachable at http://localhost:4466 with no port-forward.
+service:
+  type: NodePort
+  port: 80
+  nodePort: 30466
+
+resources:
+  requests: { cpu: 100m, memory: 128Mi }

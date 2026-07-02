@@ -82,14 +82,16 @@ So we expose the UIs the way that actually works on this setup:
 - `service.type: NodePort` with a **pinned** `nodePort` on
   [`helm/grafana/values.yaml`](../helm/grafana/values.yaml) (30000),
   [`helm/alloy/values.yaml`](../helm/alloy/values.yaml) (30345 for the UI / http-metrics
-  port), and [`helm/kube-prometheus-stack/values.yaml`](../helm/kube-prometheus-stack/values.yaml)
-  (30090 for Prometheus, 30093 for Alertmanager). The Alloy chart also passes `nodePort`
-  through on `extraPorts`, but the OTLP ports are deliberately left unpinned — they stay
-  cluster-internal.
+  port), [`helm/kube-prometheus-stack/values.yaml`](../helm/kube-prometheus-stack/values.yaml)
+  (30090 for Prometheus, 30093 for Alertmanager), and
+  [`helm/headlamp/values.yaml`](../helm/headlamp/values.yaml) (30466). The Alloy chart also
+  passes `nodePort` through on `extraPorts`, but the OTLP ports are deliberately left
+  unpinned — they stay cluster-internal.
 - [`kind/cluster.yaml`](../kind/cluster.yaml) `extraPortMappings` publish those node ports
   on the host: `3000 -> 30000` (Grafana), `12345 -> 30345` (Alloy), `9090 -> 30090`
-  (Prometheus), `9093 -> 30093` (Alertmanager). kind wires the host port straight to the
-  node container's port, and kube-proxy routes the nodePort to the pod.
+  (Prometheus), `9093 -> 30093` (Alertmanager), `4466 -> 30466` (Headlamp). kind wires the
+  host port straight to the node container's port, and kube-proxy routes the nodePort to
+  the pod.
 
 | UI           | nodePort | Host URL |
 |--------------|----------|----------|
@@ -97,10 +99,28 @@ So we expose the UIs the way that actually works on this setup:
 | Alloy        | 30345    | http://localhost:12345 |
 | Prometheus   | 30090    | http://localhost:9090 |
 | Alertmanager | 30093    | http://localhost:9093 |
+| Headlamp     | 30466    | http://localhost:4466 |
 
 `extraPortMappings` are fixed at cluster-creation time, so the port pairs in
 `kind/cluster.yaml` and the chart values must stay in sync, and changing them needs a
 `make down && make up`.
+
+## Cluster UI: Headlamp
+
+[Headlamp](https://github.com/kubernetes-sigs/headlamp) (`headlamp/headlamp`) is a
+lightweight, in-cluster Kubernetes dashboard, deployed by default so the demo ships with a
+point-and-click view of the cluster (pods, deployments, logs, events) alongside Grafana's
+telemetry view. See [`helm/headlamp/values.yaml`](../helm/headlamp/values.yaml).
+
+- **Runs in-cluster** (`config.inCluster: true`): Headlamp talks to the API server through
+  its own ServiceAccount rather than a mounted kubeconfig.
+- **No-login demo mode**: `config.unsafeUseServiceAccountToken: true` authenticates every
+  visitor as the pod's ServiceAccount, so the NodePort UI opens straight in with no token
+  prompt. The chart's `clusterRoleBinding` binds that ServiceAccount to **cluster-admin**.
+  Together this is effectively unauthenticated cluster-admin — acceptable only because the
+  kind cluster is local and throwaway; a shared deployment must swap this for OIDC or an
+  auth proxy.
+- **Stateless**: no persistence — it's a read/write window onto live cluster state.
 
 ## Data flow
 
@@ -140,39 +160,34 @@ Metrics collection is described above; Alloy config lives in
   hostPath) before going multi-node.
 - **No persistence for Grafana**: dashboards/datasources are provisioned as code, so the
   Grafana pod is intentionally ephemeral.
-- **Demo app vs. smoke test**: `make smoke-test` validates the pipeline with synthetic
-  signals independently; the demo app (below) is the real workload.
 
 ## Demo application (apps/otel-demo)
 
-An OTel-instrumented Go microservices app (`loadgen → frontend → {checkout → payment,
+An OTel-instrumented Go microservices app (`frontend → {checkout → payment,
 catalog}`) lives in [`apps/otel-demo/`](../apps/otel-demo/) in its own **`otel-demo`**
-namespace. It's deliberately designed to feed the *existing* collectors with **zero
-changes to any `helm/*/values.yaml`**:
+namespace. The frontend serves an interactive web UI at `http://localhost:8080` for
+driving traffic by hand; an optional `loadgen` (toggle with `DEMO_LOADGEN`) drives it
+in the background. It's deliberately designed to feed the *existing* collectors with
+**zero changes to any `helm/*/values.yaml`**:
 
 | Signal   | App emits | Stack path |
 |----------|-----------|-----------|
 | Traces   | OTel SDK, OTLP/gRPC to Alloy (`OTEL_EXPORTER_OTLP_ENDPOINT`) | Alloy `otelcol.receiver.otlp` → Tempo |
 | Metrics  | OTel Prometheus exporter on `/metrics` + a `PodMonitor` | Prometheus scrape → remote_write → Mimir |
-| Logs     | `slog` JSON to stdout with a `traceID` field | Alloy pod-log tail → Loki |
+| Logs     | `slog` JSON to stdout with a `trace_id` field | Alloy pod-log tail → Loki |
 | Profiles | Go `net/http/pprof` + `pyroscope.io/scrape: "true"` | Alloy `pyroscope.scrape` → Pyroscope |
 
 Two constraints the app respects so the stack stays untouched:
 
-- **Log field spelling**: the trace id is logged as `traceID` (no underscore) to match the
-  Loki datasource `derivedFields` regex in `helm/grafana/values.yaml`, so logs auto-link to
-  traces.
+- **Log field spelling**: the trace id is logged as `trace_id` to match the Loki datasource
+  `derivedFields` regex in `helm/grafana/values.yaml` (and the structured-metadata key Alloy
+  promotes), so logs auto-link to traces.
 - **Single container port**: each service serves app routes, `/metrics`, and
   `/debug/pprof/*` on one port, so Alloy's `discovery.kubernetes` (which infers the scrape
   address from the declared container port) resolves exactly one Pyroscope target per pod.
   (If a service ever needed multiple ports, the alternative is a small relabel in Alloy to
   honour a `pyroscope.io/port` annotation.)
 
-Build/deploy/verify: `make demo`, `make demo-test`, `make demo-clean`. A curated RED
+Build/deploy/verify: `make demo` (add `DEMO_LOADGEN=false` to skip the loadgen),
+`make demo-ui`, `make demo-test`, `make demo-clean`. A curated RED
 dashboard ships as a `grafana_dashboard=1` ConfigMap and is auto-loaded by the sidecar.
-
-## Next steps / ideas
-
-- If you later run on an environment with a routable container network (e.g. rootful
-  Podman or a real cluster), a `LoadBalancer` + MetalLB setup could replace the NodePort
-  mappings for a more production-like access pattern.

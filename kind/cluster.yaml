@@ -6,7 +6,7 @@
 # network itself isn't host-routable). The nodePorts match helm/*/values.yaml.
 kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4
-name: grafana-lgtm-demo
+name: observability-demo
 nodes:
   - role: control-plane
     extraPortMappings:
@@ -18,3 +18,7 @@ nodes:
         hostPort: 9090
       - containerPort: 30093   # Alertmanager UI  -> http://localhost:9093
         hostPort: 9093
+      - containerPort: 30080   # otel-demo web UI -> http://localhost:8080
+        hostPort: 8080
+      - containerPort: 30466   # Headlamp UI      -> http://localhost:4466
+        hostPort: 4466
