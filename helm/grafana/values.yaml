@@ -1,0 +1,91 @@
+# Grafana — wired to the LGTM stack via provisioned datasources.
+#
+# Login: admin / admin (demo only). Reach the UI with `make grafana-ui`.
+
+adminUser: admin
+adminPassword: admin
+
+persistence:
+  enabled: false # ephemeral is fine; everything is provisioned as code
+
+# Exposed to the host as a NodePort. The kind node maps hostPort 3000 ->
+# containerPort 30000 (see kind/cluster.yaml extraPortMappings), so the UI is
+# reachable at http://localhost:3000 with no port-forward.
+service:
+  type: NodePort
+  port: 80
+  nodePort: 30000
+
+resources:
+  requests: { cpu: 100m, memory: 128Mi }
+
+# Provisioned datasources for all four signals, with cross-signal correlations.
+datasources:
+  datasources.yaml:
+    apiVersion: 1
+    datasources:
+      - name: Mimir
+        type: prometheus
+        uid: mimir
+        access: proxy
+        url: http://mimir-gateway.observability.svc.cluster.local/prometheus
+        isDefault: true
+        jsonData:
+          prometheusType: Mimir
+          timeInterval: 15s
+
+      - name: Loki
+        type: loki
+        uid: loki
+        access: proxy
+        url: http://loki.observability.svc.cluster.local:3100
+        jsonData:
+          # Turn a "traceID" field in logs into a link to the Tempo trace.
+          derivedFields:
+            - name: TraceID
+              matcherRegex: '"?tracee?[iI][dD]"?[:=]"?(\w+)"?'
+              datasourceUid: tempo
+              url: '$${__value.raw}'
+
+      - name: Tempo
+        type: tempo
+        uid: tempo
+        access: proxy
+        url: http://tempo.observability.svc.cluster.local:3200
+        jsonData:
+          # trace -> logs (jump to Loki filtered by the trace's service)
+          tracesToLogsV2:
+            datasourceUid: loki
+            filterByTraceID: true
+            tags:
+              - key: service.name
+                value: service_name
+          # trace -> metrics (span/service-graph metrics live in Mimir)
+          tracesToMetrics:
+            datasourceUid: mimir
+          # trace -> profiles
+          tracesToProfiles:
+            datasourceUid: pyroscope
+          serviceMap:
+            datasourceUid: mimir
+          nodeGraph:
+            enabled: true
+
+      - name: Pyroscope
+        type: grafana-pyroscope-datasource
+        uid: pyroscope
+        access: proxy
+        url: http://pyroscope.observability.svc.cluster.local:4040
+
+# Load dashboards dropped into ConfigMaps labelled grafana_dashboard=1.
+sidecar:
+  dashboards:
+    enabled: true
+    label: grafana_dashboard
+    labelValue: "1"
+    searchNamespace: ALL
+
+# Emit a ServiceMonitor so kube-prometheus-stack's Prometheus scrapes Grafana
+# (Grafana serves /metrics on its HTTP port 3000).
+serviceMonitor:
+  enabled: true

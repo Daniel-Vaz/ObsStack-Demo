@@ -1,0 +1,20 @@
+# kind cluster for the Grafana LGTM demo.
+# Single control-plane node keeps the footprint minimal. The Grafana and Alloy
+# web UIs are exposed as NodePort services; these extraPortMappings publish the
+# node ports on the host so the UIs are reachable at http://localhost:<port>
+# with no port-forward (works on WSL2 + rootless Podman, where the container
+# network itself isn't host-routable). The nodePorts match helm/*/values.yaml.
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: grafana-lgtm-demo
+nodes:
+  - role: control-plane
+    extraPortMappings:
+      - containerPort: 30000   # Grafana UI       -> http://localhost:3000
+        hostPort: 3000
+      - containerPort: 30345   # Alloy UI         -> http://localhost:12345
+        hostPort: 12345
+      - containerPort: 30090   # Prometheus UI    -> http://localhost:9090
+        hostPort: 9090
+      - containerPort: 30093   # Alertmanager UI  -> http://localhost:9093
+        hostPort: 9093

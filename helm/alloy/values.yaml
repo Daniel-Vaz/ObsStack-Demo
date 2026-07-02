@@ -1,0 +1,163 @@
+# Grafana Alloy — the collector for logs, traces and profiles.
+#
+# Runs as a DaemonSet. Metrics are no longer Alloy's concern: kube-prometheus-
+# stack's Prometheus scrapes every component (via ServiceMonitors) and
+# remote-writes to Mimir. Alloy handles the other three signals.
+#
+#   Logs    : all pod stdout/stderr (via the Kubernetes API)  -> Loki
+#   Traces  : OTLP in on :4317 (gRPC) / :4318 (HTTP)          -> Tempo
+#   Profiles: pods annotated  pyroscope.io/scrape: "true"     -> Pyroscope
+
+controller:
+  type: daemonset
+
+# Emit a ServiceMonitor so kube-prometheus-stack's Prometheus scrapes Alloy's
+# own metrics (served on :12345/metrics).
+serviceMonitor:
+  enabled: true
+
+# Expose only the Alloy UI to the host as a NodePort. The kind node maps
+# hostPort 12345 -> containerPort 30345 (see kind/cluster.yaml extraPortMappings),
+# so the UI is reachable at http://localhost:12345. The OTLP receiver ports stay
+# cluster-internal — demo apps push to them via the in-cluster Service DNS.
+service:
+  type: NodePort
+  nodePort: 30345   # UI / http-metrics (port 12345)
+
+alloy:
+  # OTLP receivers need to be reachable from other pods.
+  listenAddr: 0.0.0.0
+
+  # Expose the OTLP receiver ports on the Alloy service (cluster-internal;
+  # reachable at alloy.observability.svc.cluster.local:4317 / :4318).
+  extraPorts:
+    - name: otlp-grpc
+      port: 4317
+      targetPort: 4317
+      protocol: TCP
+    - name: otlp-http
+      port: 4318
+      targetPort: 4318
+      protocol: TCP
+
+  resources:
+    requests: { cpu: 100m, memory: 128Mi }
+
+  configMap:
+    content: |
+      // ========================================================================
+      // Shared Kubernetes pod discovery
+      // ========================================================================
+      discovery.kubernetes "pods" {
+        role = "pod"
+      }
+
+      // ========================================================================
+      // LOGS  ->  Loki
+      // Tails every pod's stdout/stderr through the Kubernetes API.
+      // (Single-node demo: one DaemonSet pod tails all logs. On multi-node
+      //  clusters enable clustering to avoid duplicate tailing.)
+      // ========================================================================
+      discovery.relabel "logs_pods" {
+        targets = discovery.kubernetes.pods.targets
+
+        rule {
+          source_labels = ["__meta_kubernetes_namespace"]
+          target_label  = "namespace"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_name"]
+          target_label  = "pod"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_container_name"]
+          target_label  = "container"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_node_name"]
+          target_label  = "node"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_label_app_kubernetes_io_name"]
+          target_label  = "app"
+        }
+      }
+
+      loki.source.kubernetes "pods" {
+        targets    = discovery.relabel.logs_pods.output
+        forward_to = [loki.write.default.receiver]
+      }
+
+      loki.write "default" {
+        endpoint {
+          url = "http://loki.observability.svc.cluster.local:3100/loki/api/v1/push"
+        }
+      }
+
+      // ========================================================================
+      // TRACES  ->  Tempo
+      // Receives OTLP from demo apps, batches, and exports to Tempo.
+      // ========================================================================
+      otelcol.receiver.otlp "default" {
+        grpc {
+          endpoint = "0.0.0.0:4317"
+        }
+        http {
+          endpoint = "0.0.0.0:4318"
+        }
+        output {
+          traces = [otelcol.processor.batch.default.input]
+        }
+      }
+
+      otelcol.processor.batch "default" {
+        output {
+          traces = [otelcol.exporter.otlp.tempo.input]
+        }
+      }
+
+      otelcol.exporter.otlp "tempo" {
+        client {
+          endpoint = "tempo.observability.svc.cluster.local:4317"
+          tls {
+            insecure = true
+          }
+        }
+      }
+
+      // ========================================================================
+      // PROFILES  ->  Pyroscope
+      // Scrapes pprof endpoints of pods annotated pyroscope.io/scrape=true.
+      // ========================================================================
+      discovery.relabel "profiles_pods" {
+        targets = discovery.kubernetes.pods.targets
+
+        rule {
+          source_labels = ["__meta_kubernetes_pod_annotation_pyroscope_io_scrape"]
+          regex         = "true"
+          action        = "keep"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_namespace"]
+          target_label  = "namespace"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_name"]
+          target_label  = "pod"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_container_name"]
+          target_label  = "service_name"
+        }
+      }
+
+      pyroscope.scrape "pods" {
+        targets    = discovery.relabel.profiles_pods.output
+        forward_to = [pyroscope.write.default.receiver]
+      }
+
+      pyroscope.write "default" {
+        endpoint {
+          url = "http://pyroscope.observability.svc.cluster.local:4040"
+        }
+      }

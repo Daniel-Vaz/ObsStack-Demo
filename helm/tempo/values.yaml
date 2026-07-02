@@ -1,0 +1,49 @@
+# Tempo (traces) — single-binary (monolithic) chart, filesystem storage.
+#
+# The grafana/tempo chart (as opposed to tempo-distributed) is already a
+# monolithic single-binary deployment. Alloy pushes OTLP here.
+#
+# Write path (Alloy OTLP): tempo:4317 (gRPC) / tempo:4318 (HTTP)
+# Read  path (Grafana):    http://tempo:3200
+
+replicas: 1
+
+tempo:
+  # Enable the OTLP receivers (gRPC + HTTP) so Alloy can forward traces.
+  receivers:
+    otlp:
+      protocols:
+        grpc:
+          endpoint: 0.0.0.0:4317
+        http:
+          endpoint: 0.0.0.0:4318
+  # Local filesystem storage for a single node.
+  storage:
+    trace:
+      backend: local
+      local:
+        path: /var/tempo/traces
+      wal:
+        path: /var/tempo/wal
+  # Generate service-graph and span metrics and remote-write them to Mimir
+  # so the demo shows the traces->metrics correlation out of the box.
+  metricsGenerator:
+    enabled: true
+    remoteWriteUrl: "http://mimir-gateway.observability.svc.cluster.local/api/v1/push"
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+
+# Enable overrides so the metrics-generator processors are active by default.
+global_overrides:
+  metrics_generator_processors:
+    - service-graphs
+    - span-metrics
+
+persistence:
+  enabled: true
+  size: 5Gi
+
+# Emit a ServiceMonitor so kube-prometheus-stack's Prometheus scrapes Tempo
+# (Tempo serves /metrics on its HTTP port 3200).
+serviceMonitor:
+  enabled: true

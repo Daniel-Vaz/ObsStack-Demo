@@ -1,0 +1,11 @@
+# Local tooling / editor
+.DS_Store
+*.swp
+.idea/
+.vscode/
+.calude/
+
+# Helm/kube scratch
+*.tgz
+kubeconfig
+*.local.yaml

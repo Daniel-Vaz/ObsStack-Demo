@@ -1,0 +1,104 @@
+# kube-prometheus-stack — Prometheus, Alertmanager, the Prometheus Operator,
+# kube-state-metrics and node-exporter.
+#
+# Prometheus is now the sole metrics scraper for the whole demo. Every other
+# component (Mimir/Loki/Tempo/Pyroscope/Grafana/Alloy) ships a ServiceMonitor
+# from its own chart (see each helm/*/values.yaml); the operator turns those
+# into scrape targets. Prometheus then remote-writes every sample to Mimir,
+# which Grafana reads from. Alloy no longer touches metrics.
+#
+# Grafana and the Windows exporter are intentionally NOT deployed here: Grafana
+# comes from its own grafana-community chart, and there are no Windows nodes.
+
+# ---- Grafana: disabled (deployed separately from grafana-community/grafana) ----
+grafana:
+  enabled: false
+  forceDeployDashboards: true
+
+# ---- Windows exporter: disabled (no Windows nodes in this demo) ----
+windowsMonitoring:
+  enabled: false
+
+# ---- kube-state-metrics (cluster object state) ----
+kubeStateMetrics:
+  enabled: true
+kube-state-metrics:                     # subchart resource tuning
+  resources:
+    requests: { cpu: 25m, memory: 64Mi }
+
+# ---- node-exporter (per-node hardware/OS metrics) ----
+nodeExporter:
+  enabled: true
+prometheus-node-exporter:               # subchart resource tuning
+  resources:
+    requests: { cpu: 25m, memory: 32Mi }
+
+# ---- Prometheus Operator ----
+prometheusOperator:
+  enabled: true
+  resources:
+    requests: { cpu: 50m, memory: 128Mi }
+
+# ---- Control-plane component monitors: disabled ----
+# kind doesn't expose kube-controller-manager / scheduler / etcd / kube-proxy
+# metrics on a scrapeable interface, so these ServiceMonitors would sit
+# permanently "down". Turn them off to keep the target list clean.
+kubeControllerManager:
+  enabled: false
+kubeScheduler:
+  enabled: false
+kubeEtcd:
+  enabled: false
+kubeProxy:
+  enabled: false
+
+# ---- Alertmanager ----
+alertmanager:
+  enabled: true
+  # Expose the Alertmanager UI to the host as a NodePort, the same way Grafana
+  # and Alloy are exposed. The kind node maps hostPort 9093 -> containerPort
+  # 30093 (see kind/cluster.yaml extraPortMappings), so it's reachable at
+  # http://localhost:9093.
+  service:
+    type: NodePort
+    nodePort: 30093
+  alertmanagerSpec:
+    # Ephemeral for the demo (no PVC).
+    storage: {}
+    resources:
+      requests: { cpu: 25m, memory: 64Mi }
+
+# ---- Prometheus ----
+prometheus:
+  enabled: true
+  # Expose the Prometheus UI to the host as a NodePort (kind maps hostPort 9090
+  # -> containerPort 30090; see kind/cluster.yaml), reachable at
+  # http://localhost:9090.
+  service:
+    type: NodePort
+    nodePort: 30090
+  prometheusSpec:
+    # By default the operator only selects ServiceMonitors/PodMonitors carrying
+    # this release's label. Our backends' ServiceMonitors live in the
+    # observability namespace without that label, so widen every selector to
+    # match all resources in all namespaces.
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+    probeSelectorNilUsesHelmValues: false
+    ruleSelectorNilUsesHelmValues: false
+    serviceMonitorSelector: {}
+    serviceMonitorNamespaceSelector: {}
+    podMonitorSelector: {}
+    podMonitorNamespaceSelector: {}
+
+    # Mimir is the long-term metrics store; Prometheus keeps only a short local
+    # buffer and forwards everything downstream.
+    retention: 2h
+
+    # Remote-write every scraped sample to Mimir. Grafana's metrics datasource
+    # points at Mimir, so this is what makes scraped metrics queryable.
+    remoteWrite:
+      - url: http://mimir-gateway.observability.svc.cluster.local/api/v1/push
+
+    resources:
+      requests: { cpu: 200m, memory: 512Mi }

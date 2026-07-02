@@ -1,0 +1,134 @@
+# Mimir (metrics) — minimal footprint.
+#
+# NOTE: Mimir has no official single-binary/monolithic Helm chart; the only
+# first-party chart is grafana/mimir-distributed (microservices). We therefore
+# run it at the smallest supported scale: single replica per required
+# component, zone-aware replication disabled, ingest-storage (Kafka) disabled,
+# and all optional components (alertmanager, ruler, caches, overrides-exporter,
+# query-scheduler) turned off. Object storage is provided by a bundled MinIO.
+#
+# Write path (Prometheus remote_write): http://mimir-gateway/api/v1/push
+# Read  path (Grafana datasource):       http://mimir-gateway/prometheus
+
+# Don't deploy the bundled Kafka statefulset...
+kafka:
+  enabled: false
+
+mimir:
+  structuredConfig:
+    # ...and switch Mimir itself back to the classic push architecture. The
+    # chart's base config defaults ingest_storage.enabled=true (Kafka-backed),
+    # so without this every component fails config validation with
+    # "the Kafka address has not been configured".
+    ingest_storage:
+      enabled: false
+    # Single ingester => replication factor 1, and accept gRPC pushes again
+    # (ingest-storage mode disables the push gRPC method).
+    ingester:
+      push_grpc_method_enabled: true
+      ring:
+        replication_factor: 1
+    # Single store-gateway => its sharding ring must also be RF 1, otherwise
+    # queries that consult the store-gateway ring fail with
+    # "too many unhealthy instances in the ring" (default RF is 3).
+    store_gateway:
+      sharding_ring:
+        replication_factor: 1
+    # Relax limits so a demo can push freely.
+    limits:
+      max_global_series_per_user: 0
+      ingestion_rate: 100000
+      ingestion_burst_size: 200000
+
+# ---- Required components: one replica each, zones disabled ----
+distributor:
+  replicas: 1
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+
+ingester:
+  replicas: 1
+  zoneAwareReplication:
+    enabled: false
+  persistentVolume:
+    size: 2Gi
+  resources:
+    requests: { cpu: 100m, memory: 512Mi }
+
+querier:
+  replicas: 1
+  resources:
+    requests: { cpu: 100m, memory: 128Mi }
+
+query_frontend:
+  replicas: 1
+  resources:
+    requests: { cpu: 100m, memory: 128Mi }
+
+# Keep a single query-scheduler: Mimir's base config points the querier's
+# frontend_worker at the scheduler, so disabling it entirely breaks the read
+# path (queries hang / time out) even though buildinfo still responds.
+query_scheduler:
+  replicas: 1
+  resources:
+    requests: { cpu: 50m, memory: 64Mi }
+
+store_gateway:
+  replicas: 1
+  zoneAwareReplication:
+    enabled: false
+  persistentVolume:
+    size: 2Gi
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+
+compactor:
+  replicas: 1
+  persistentVolume:
+    size: 2Gi
+  resources:
+    requests: { cpu: 100m, memory: 128Mi }
+
+# Single nginx gateway is the one entrypoint for reads and writes.
+gateway:
+  replicas: 1
+  resources:
+    requests: { cpu: 50m, memory: 64Mi }
+
+# ---- Disabled: optional / not needed for a demo ----
+alertmanager:
+  enabled: false
+ruler:
+  enabled: false
+overrides_exporter:
+  replicas: 0
+# Only required to coordinate zone-aware rollouts, which we disabled.
+rollout_operator:
+  enabled: false
+
+# Caches are already disabled by default; keep them off explicitly.
+chunks-cache:
+  enabled: false
+index-cache:
+  enabled: false
+metadata-cache:
+  enabled: false
+results-cache:
+  enabled: false
+
+# Bundled object storage for the demo.
+minio:
+  enabled: true
+  persistence:
+    size: 5Gi
+  resources:
+    requests: { cpu: 100m, memory: 128Mi }
+
+# Emit ServiceMonitors so kube-prometheus-stack's Prometheus scrapes every Mimir
+# component. The chart only targets components that actually serve /metrics (the
+# nginx gateway is excluded), so there are no perpetually-down targets.
+metaMonitoring:
+  serviceMonitor:
+    enabled: true
+  grafanaAgent:
+    enabled: false

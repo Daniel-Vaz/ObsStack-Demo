@@ -1,0 +1,74 @@
+# Loki (logs) — single-binary (monolithic) mode, filesystem storage.
+#
+# Write path (Alloy):            http://loki:3100/loki/api/v1/push
+# Read  path (Grafana):          http://loki:3100
+# Auth is disabled so no X-Scope-OrgID header is required.
+
+deploymentMode: SingleBinary
+
+loki:
+  auth_enabled: false
+  commonConfig:
+    replication_factor: 1
+  # tsdb + filesystem: no object store needed for a single node.
+  storage:
+    type: filesystem
+  schemaConfig:
+    configs:
+      - from: "2024-01-01"
+        store: tsdb
+        object_store: filesystem
+        schema: v13
+        index:
+          prefix: index_
+          period: 24h
+  limits_config:
+    retention_period: 72h
+    reject_old_samples: false
+    volume_enabled: true
+  # Keep pattern/ruler subsystems quiet in a single-node demo.
+  pattern_ingester:
+    enabled: false
+
+singleBinary:
+  replicas: 1
+  persistence:
+    enabled: true
+    size: 5Gi
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+
+# Disable the scalable-mode workloads — we only run the single binary.
+read:
+  replicas: 0
+write:
+  replicas: 0
+backend:
+  replicas: 0
+
+# No nginx gateway; talk to the loki service directly.
+gateway:
+  enabled: false
+
+# Caches, canary, tests, and bundled object storage off for a minimal demo.
+chunksCache:
+  enabled: false
+resultsCache:
+  enabled: false
+lokiCanary:
+  enabled: false
+test:
+  enabled: false
+minio:
+  enabled: false
+
+# Emit a ServiceMonitor so kube-prometheus-stack's Prometheus scrapes Loki.
+# Loki's own self-monitoring (its bundled agent) stays off — Prometheus is the
+# only scraper now.
+monitoring:
+  selfMonitoring:
+    enabled: false
+    grafanaAgent:
+      installOperator: false
+  serviceMonitor:
+    enabled: true
