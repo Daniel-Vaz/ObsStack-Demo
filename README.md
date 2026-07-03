@@ -21,34 +21,26 @@ host via kind `extraPortMappings`, so they're reachable directly on `localhost`
 >![Grafana Kubernetes / Compute Resources / Cluster dashboard showing CPU and memory utilisation panels by namespace](docs/images/grafana-dashboard-example.png)
 >*Grafana at `http://localhost:3000`, rendering a stock Kubernetes dashboard from metrics scraped by Prometheus and stored in Mimir — one of the many views this stack lights up.*
 
-```
-┌──────────────────────────────── kind cluster ─────────────────────────────────┐
-│                                                                                │
-│                          ┌───────────────┐                                     │
-│                          │  workload &   │                                     │
-│                          │  system pods  │                                     │
-│                          └──▲─────────┬──┘                                     │
-│    scrape /metrics          │         │  logs · traces · profiles              │
-│    ┌────────────────────────┘         └────────────┐                           │
-│    │                                                ▼                          │
-│ ┌──┴─────────┐                                ┌───────────┐                    │
-│ │ Prometheus │                                │   Alloy   │                    │
-│ │   (KPS)    │                                └─────┬─────┘                    │
-│ └──┬─────────┘                                      │  logs → Loki             │
-│    │ remote_write                                   │  traces → Tempo          │
-│    ▼                                                ▼  profiles → Pyroscope    │
-│ ┌──────────┐                                 ┌───────────────┐                 │
-│ │  Mimir   │◀── span / service-graph ───────┤ Loki  Tempo    │                 │
-│ │          │    metrics (from Tempo)         │  Pyroscope    │                 │
-│ └────┬─────┘                                 └───────┬───────┘                 │
-│      │              provisioned datasources          │                         │
-│      │                    ┌──────────┐               │                         │
-│      └──────────────────▶ | Grafana  │ ◀────────────┘                         │
-│                           └──────────┘                                         │
-│                               ▲                                                │
-│                               └── you (browser)                                │
-│                                                                                │
-└────────────────────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+    subgraph cluster["kind cluster"]
+        pods["workload &amp; system pods"]
+        prom["Prometheus (KPS)"]
+        alloy["Alloy"]
+        mimir["Mimir"]
+        backends["Loki · Tempo · Pyroscope"]
+        grafana["Grafana"]
+
+        pods -->|"scrape /metrics"| prom
+        pods -->|"logs · traces · profiles"| alloy
+        prom -->|remote_write| mimir
+        alloy -->|"logs → Loki<br/>traces → Tempo<br/>profiles → Pyroscope"| backends
+        backends -->|"span / service-graph metrics (from Tempo)"| mimir
+        mimir -->|provisioned datasources| grafana
+        backends -->|provisioned datasources| grafana
+    end
+
+    grafana --> browser["you (browser)"]
 ```
 
 Prometheus **scrapes** the pods (pull, via ServiceMonitors) and remote-writes to
