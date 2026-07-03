@@ -48,6 +48,9 @@ ships the profiles to Pyroscope.
   intentional hot spot.
 - Narrow the time range to a burst of order traffic and watch the profile change.
 
+![Grafana Profiles Drilldown showing a CPU flame graph and top-functions table for a service scraped by Pyroscope](../images/grafana-drilldown-profiles.png)
+*Profiles Drilldown over the Pyroscope datasource — CPU-time-over-time on top, the flame graph and top-functions table below. Wider frames = more CPU.*
+
 ## Why it matters
 
 Metrics, logs, and traces tell you *that* a service is slow or hungry and *which*

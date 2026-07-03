@@ -48,6 +48,9 @@ talks to Loki directly.
 - Filter with LogQL: `{namespace="otel-demo"} |= "order placed"`.
 - Click the `trace_id` on any line to jump straight to the matching trace.
 
+![Grafana Logs Drilldown grouping log volume by service label — mimir, pyroscope, grafana, kube-apiserver, headlamp](../images/grafana-drilldown-logs.png)
+*Logs Drilldown over the Loki datasource — every service's log stream, grouped by label with a volume sparkline, ready to drill into.*
+
 ## Why it matters
 
 Logs are the ground truth of "what did the code actually say happened." Loki lets

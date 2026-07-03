@@ -58,6 +58,9 @@ pod logs and `pprof` endpoints on its own. Full config detail is in
 - Generate traffic in the demo app and watch the receiver/exporter components
   light up.
 
+![Alloy UI Graph view showing the traces, logs, and profiles pipelines wired component-by-component with live throughput numbers](../images/alloy-ui.png)
+*The Alloy Graph view — traces (`otelcol.receiver.otlp → batch → exporter.otlp "tempo"`), logs (`discovery → loki.source → loki.process → loki.write`), and profiles (`pyroscope.scrape → pyroscope.write`) as three live pipelines, annotated with per-second throughput.*
+
 ## Why it matters
 
 Without a collector, every app would need to know the address and protocol of

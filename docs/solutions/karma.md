@@ -15,6 +15,9 @@ bare-bones; Karma gives you a much richer view of the same data: alerts grouped
 by label, colour-coded by severity, with fast filtering, multi-Alertmanager
 aggregation, and silence management from the browser.
 
+![Alertmanager's own bare-bones web UI showing a single Watchdog alert with its label matchers](../images/alertmanager-ui.png)
+*Alertmanager's built-in UI at `http://localhost:9093` — functional but plain, showing the always-on `Watchdog` alert. Karma renders this same data with grouping, severity colours, and filtering.*
+
 Crucially, Karma is a **consumer of Alertmanager, not a receiver.** It *polls
 Alertmanager's HTTP API* on an interval and renders whatever it finds.
 Alertmanager never pushes to it — there is no "send alerts to Karma" step.
@@ -58,6 +61,9 @@ Karma is deployed by default with `make up` (target: `make karma`) into the
   each poll (default every 60s).
 
 ## Try it
+
+![Karma dashboard at localhost:8081 showing Watchdog and PrometheusRemoteStorageFailures alerts as rich, colour-coded cards with expanded labels and annotations](../images/karma-ui.png)
+*The same alerts in Karma at `http://localhost:8081` — each grouped into a colour-coded card with its full labels, description, summary, and runbook link laid out for fast triage. Compare with Alertmanager's plainer list above.*
 
 - Open `http://localhost:8081`. Out of the box you'll see at least the
   **`Watchdog`** alert (kube-prometheus-stack's always-on heartbeat) and any

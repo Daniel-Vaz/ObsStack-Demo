@@ -48,6 +48,9 @@ Headlamp is deployed by default with `make up` so the demo ships with a
 - Watch pods go `Ready` during `make up`, or inspect a Deployment's replica
   status — no `kubectl` needed.
 
+![Headlamp Map view showing the cluster grouped by namespace — observability, kube-system, otel-demo, default — as interconnected resource cards](../images/headlamp-ui.png)
+*Headlamp's Map view at `http://localhost:4466` — the whole cluster laid out by namespace, with the `otel-demo` app's `frontend / checkout / payment / catalog` deployments visible alongside the `observability` stack.*
+
 ## Why it matters
 
 Observability tools tell you about your *application's* behavior; you still need

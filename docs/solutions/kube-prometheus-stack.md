@@ -63,6 +63,16 @@ for the exact values and rationale.
 - Open Alertmanager at `http://localhost:9093` to see the alert-routing UI.
 - In Grafana, **Explore → Mimir** queries the *same* metrics after remote-write.
 
+![Prometheus query UI at localhost:9090 graphing an apiserver burn-rate PromQL expression](../images/prometheus-ui.png)
+*Prometheus's own UI at `http://localhost:9090` — the short 2-hour local buffer, queryable with PromQL before samples are remote-written to Mimir.*
+
+Once metrics land in Mimir, Grafana renders them into dashboards. The bundled
+kube-state-metrics and node-exporter light up the standard Kubernetes dashboards
+out of the box:
+
+![Grafana Kubernetes / Compute Resources / Cluster dashboard showing CPU and memory utilisation panels by namespace](../images/grafana-dashboard-example.png)
+*A stock **Kubernetes / Compute Resources / Cluster** dashboard in Grafana, driven by the metrics KPS scrapes and remote-writes to Mimir.*
+
 ## Why it matters
 
 Metrics are the cheapest, highest-level signal — perfect for dashboards and

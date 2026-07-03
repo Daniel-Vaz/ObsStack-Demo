@@ -21,6 +21,9 @@ The **frontend serves an interactive web UI at `http://localhost:8080`** — cli
 steady stream from the browser. Each `/order` produces a two-level distributed
 trace with fan-out.
 
+![otel-demo traffic console web UI at localhost:8080 — Place order / Browse catalog / Send burst controls, a live request counter, and a response log](../../docs/images/oteldemoapp-ui.png)
+*The traffic console at `http://localhost:8080` — drive orders by hand or with *Auto load*, and watch requests, 2xx, and errors tick up live. Every order fans out `frontend → checkout → payment` and `frontend → catalog`.*
+
 `loadgen` is an **optional** background traffic driver that hits `/order` on a
 timer so the stack always has live telemetry with no interaction. It's **off by
 default** — you generate traffic by hand from the UI; set `DEMO_LOADGEN=true` to

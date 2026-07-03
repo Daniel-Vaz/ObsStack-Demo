@@ -54,6 +54,16 @@ to [Alloy](./alloy.md), which forwards them to Tempo.
 - From a span, follow the pre-wired links to the exact logs and metrics for that
   request.
 
+![Grafana Traces Drilldown showing span rate, duration heatmap, and attribute comparison for Tempo](../images/grafana-drilldown-traces.png)
+*Traces Drilldown over the Tempo datasource — span rate, a duration heatmap, and per-attribute breakdowns of the demo app's traces.*
+
+Because the Tempo datasource is wired with **trace-to-logs**, opening a span and
+clicking *Logs for this span* pivots straight to the matching log line in Loki —
+one request, both signals, side by side:
+
+![Grafana Explore split view: a Tempo trace on the left, the correlated Loki log line on the right, linked by trace_id](../images/grafana-traces-to-logs.png)
+*A `frontend → checkout → payment / catalog` trace (left) linked to its `order placed` log line (right) via the shared `trace_id`.*
+
 ## Why it matters
 
 In a microservices world, a metric tells you *that* latency went up but not
