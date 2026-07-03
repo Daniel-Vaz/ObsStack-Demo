@@ -65,7 +65,7 @@ make up          # create cluster + deploy stack + Alloy + validate
 make down        # delete the cluster
 ```
 
->[!INFO]
+>[!NOTE]
 >Run `make help` to see every target.
 
 ## What gets deployed
