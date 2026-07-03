@@ -82,6 +82,11 @@
         <label class="inline">ms</label>
         <button id="auto" class="toggle secondary">Auto load: off</button>
       </div>
+      <div class="row" style="margin-top:12px">
+        <label class="inline" for="failPct">simulated errors</label>
+        <input id="failPct" type="number" min="0" max="100" step="5" value="0" />
+        <label class="inline">% of orders fail on purpose (payment declined) — visible in metrics · traces · logs</label>
+      </div>
     </div>
 
     <div class="card">
@@ -125,16 +130,29 @@
       while (log.childElementCount > 300) log.removeChild(log.firstChild);
     }
 
+    // Attach the configured simulated-error rate to /order requests. The
+    // frontend forwards fail_rate down to payment, which fails that fraction of
+    // orders on purpose. Applies to manual, burst and auto traffic alike.
+    function withFail(path) {
+      const pct = Math.max(0, Math.min(100, parseInt($('failPct').value, 10) || 0));
+      if (pct > 0 && path.startsWith('/order')) {
+        const sep = path.includes('?') ? '&' : '?';
+        return `${path}${sep}fail_rate=${(pct / 100).toFixed(2)}`;
+      }
+      return path;
+    }
+
     async function hit(path) {
       sent++;
+      const url = withFail(path);
       try {
-        const res = await fetch(path, { cache: 'no-store' });
+        const res = await fetch(url, { cache: 'no-store' });
         const body = (await res.text()).trim();
         if (res.ok) ok++; else err++;
-        logLine(res.status, `${path} — ${body}`);
+        logLine(res.status, `${url} — ${body}`);
       } catch (e) {
         err++;
-        logLine(0, `${path} — ${e}`);
+        logLine(0, `${url} — ${e}`);
       }
       bump();
     }

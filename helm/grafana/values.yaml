@@ -33,6 +33,10 @@ datasources:
         jsonData:
           prometheusType: Mimir
           timeInterval: 15s
+          # Mimir's ruler is disabled (see helm/mimir/values.yaml), so don't let
+          # Grafana Alerting probe/manage rules against it — otherwise the
+          # ruler probe hits the gateway with no ruler backend and 502s.
+          manageAlerts: false
 
       - name: Loki
         type: loki
@@ -57,6 +61,8 @@ datasources:
           tracesToLogsV2:
             datasourceUid: loki
             filterByTraceID: true
+            spanStartTimeShift: "-2s"
+            spanEndTimeShift: "2s"
             tags:
               - key: service.name
                 value: service_name
@@ -76,6 +82,18 @@ datasources:
         uid: pyroscope
         access: proxy
         url: http://pyroscope.observability.svc.cluster.local:4040
+
+      # Alertmanager deployed by kube-prometheus-stack. Lets Grafana's Alerting
+      # UI browse the alerts, silences and groups held in KPS's Alertmanager.
+      - name: Alertmanager
+        type: alertmanager
+        uid: alertmanager
+        access: proxy
+        url: http://kube-prometheus-stack-alertmanager.observability.svc.cluster.local:9093
+        jsonData:
+          implementation: prometheus
+          # Let Grafana surface KPS/Prometheus alerts against this Alertmanager.
+          handleGrafanaManagedAlerts: false
 
 # Load dashboards dropped into ConfigMaps labelled grafana_dashboard=1.
 sidecar:

@@ -1,0 +1,76 @@
+# Metric-based alerts on the demo's simulated errors.
+#
+# The kube-prometheus-stack Prometheus selects PrometheusRules in ALL namespaces
+# (ruleSelector/ruleNamespaceSelector are widened to {} in
+# helm/kube-prometheus-stack/values.yaml), so this is picked up with no change to
+# the stack. Firing alerts flow to Alertmanager and show up in Karma.
+#
+# Drive them from the web UI at :8080 — set "simulated errors" to e.g. 30% and
+# toggle Auto load. The counters below come from the app:
+#   demo_orders_total          (frontend) — successful orders
+#   demo_order_errors_total    (frontend) — orders that failed end-to-end
+#   demo_payment_failures_total(payment)  — simulated card declines
+# and http_server_request_duration_seconds_count is otelhttp's per-request metric,
+# carrying the response status code.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: otel-demo-errors
+  namespace: otel-demo
+  labels:
+    app.kubernetes.io/part-of: otel-demo
+    # Belt-and-suspenders: match a release-scoped ruleSelector too, in case the
+    # operator is ever narrowed back to the stock kube-prometheus-stack default.
+    release: kube-prometheus-stack
+spec:
+  groups:
+    - name: otel-demo.errors
+      rules:
+        # Ratio of failed orders over the last 5m. clamp_min avoids a divide-by-
+        # zero when no traffic is flowing.
+        - alert: OtelDemoHighOrderErrorRate
+          expr: |
+            sum(rate(demo_order_errors_total[5m]))
+              /
+            clamp_min(sum(rate(demo_orders_total[5m])) + sum(rate(demo_order_errors_total[5m])), 1)
+              > 0.05
+          for: 2m
+          labels:
+            severity: warning
+            namespace: otel-demo
+          annotations:
+            summary: High order error rate in otel-demo
+            description: >-
+              {{ $value | humanizePercentage }} of orders are failing over the
+              last 5m (threshold 5%). Simulated faults are likely turned up in
+              the demo UI.
+
+        # Any sustained stream of simulated payment declines.
+        - alert: OtelDemoPaymentDeclines
+          expr: sum(rate(demo_payment_failures_total[5m])) > 0
+          for: 5m
+          labels:
+            severity: warning
+            namespace: otel-demo
+          annotations:
+            summary: Payment service is declining charges
+            description: >-
+              payment is returning simulated declines at
+              {{ $value | humanize }}/s over the last 5m.
+
+        # 5xx responses seen by otelhttp on any demo service — a generic
+        # "something is erroring" signal independent of the business counters.
+        - alert: OtelDemoHTTP5xxErrors
+          expr: |
+            sum by (pod) (
+              rate(http_server_request_duration_seconds_count{namespace="otel-demo", http_response_status_code=~"5.."}[5m])
+            ) > 0.1
+          for: 5m
+          labels:
+            severity: critical
+            namespace: otel-demo
+          annotations:
+            summary: 5xx responses from {{ $labels.pod }}
+            description: >-
+              {{ $labels.pod }} is serving 5xx responses at
+              {{ $value | humanize }}/s over the last 5m.

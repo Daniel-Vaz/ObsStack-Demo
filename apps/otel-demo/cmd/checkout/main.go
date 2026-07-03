@@ -26,7 +26,10 @@ func main() {
 	mux := httpx.NewMux()
 	httpx.Handle(mux, "/checkout", "GET /checkout", func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
-		receipt, err := httpx.Get(ctx, client, paymentURL+"/pay")
+		// Forward any simulated-failure probability down to payment, where the
+		// fault is actually injected.
+		payURL := httpx.WithFailRate(paymentURL+"/pay", httpx.FailRate(r, 0))
+		receipt, err := httpx.Get(ctx, client, payURL)
 		if err != nil {
 			telemetry.Log(ctx).Error("payment call failed", "err", err)
 			http.Error(w, "payment unavailable", http.StatusBadGateway)

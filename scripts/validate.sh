@@ -28,21 +28,51 @@ done
 info "Checking Grafana datasource health..."
 grafana_datasource_health() {
   local creds="admin:admin"
-  # List datasource UIDs, then hit the health endpoint for each.
-  local uids
-  uids="$(curl -s -u "$creds" "localhost:${PF_PORT}/api/datasources" | grep -o '"uid":"[^"]*"' | cut -d'"' -f4)"
-  if [[ -z "$uids" ]]; then fail "no datasources returned by Grafana"; return 1; fi
-  local rc=0
-  for uid in $uids; do
+  # List datasources as "uid<TAB>type" pairs, then health-check each. We need
+  # the type because not every datasource plugin ships a backend: frontend-only
+  # plugins (e.g. the Alertmanager datasource) can't answer the backend
+  # /health endpoint and return "plugin.unavailable" there even when they work
+  # fine — the UI "Test" button probes them a different way (see below).
+  local pairs
+  pairs="$(curl -s -u "$creds" "localhost:${PF_PORT}/api/datasources" \
+    | python3 -c 'import json,sys
+for d in json.load(sys.stdin):
+    print(d["uid"], d.get("type",""), sep="\t")' 2>/dev/null)"
+  if [[ -z "$pairs" ]]; then fail "no datasources returned by Grafana"; return 1; fi
+  local rc=0 uid type
+  while IFS=$'\t' read -r uid type; do
+    [[ -z "$uid" ]] && continue
     local out
     out="$(curl -s -u "$creds" "localhost:${PF_PORT}/api/datasources/uid/${uid}/health")"
     if echo "$out" | grep -q '"status":"OK"'; then
       pass "datasource $uid healthy"
+    elif echo "$out" | grep -qi 'plugin.unavailable\|plugin unavailable'; then
+      # Frontend-only plugin: the backend /health endpoint doesn't exist.
+      # Probe it the way Grafana's UI does — proxy a request through to the
+      # backing service and treat a 2xx as healthy.
+      local probe_path
+      case "$type" in
+        alertmanager) probe_path="api/v2/status" ;;
+        *)            probe_path="" ;;
+      esac
+      if [[ -z "$probe_path" ]]; then
+        warn "datasource $uid ($type) has no backend health check — skipping"
+        continue
+      fi
+      local code
+      code="$(curl -s -o /dev/null -w '%{http_code}' -u "$creds" \
+        "localhost:${PF_PORT}/api/datasources/proxy/uid/${uid}/${probe_path}")"
+      if [[ "$code" =~ ^2 ]]; then
+        pass "datasource $uid healthy (frontend plugin, proxied $probe_path -> $code)"
+      else
+        fail "datasource $uid ($type) unhealthy: proxy $probe_path -> HTTP $code"
+        rc=1
+      fi
     else
       fail "datasource $uid unhealthy: $out"
       rc=1
     fi
-  done
+  done <<< "$pairs"
   return $rc
 }
 if ! with_port_forward svc/grafana 80 -- grafana_datasource_health; then

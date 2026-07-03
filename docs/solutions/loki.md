@@ -28,6 +28,9 @@ a log-flavored cousin of PromQL.
   storage = a fraction of the cost of full-text logging.
 - **LogQL.** Filter (`|= "error"`), parse (`| json`), and even derive metrics
   from logs (`count_over_time(...)`).
+- **Ruler.** Loki can evaluate LogQL alerting rules on a schedule and fire the
+  results into Alertmanager — "alert when the error-log rate crosses a
+  threshold," the log-native counterpart to a Prometheus alert.
 
 ## How we use it in this demo
 
@@ -40,6 +43,14 @@ talks to Loki directly.
 - Grafana's Loki datasource has a **derived field** on `trace_id`, so a log line
   from the demo app becomes a **clickable link to its trace** in
   [Tempo](./tempo.md) — that's log↔trace correlation in action.
+- The **ruler is enabled** (`helm/loki/values.yaml` → `rulerConfig`) and fires
+  into the same Alertmanager kube-prometheus-stack runs. The chart's rules
+  sidecar syncs any ConfigMap labelled `loki_rule` into the ruler; the demo ships
+  a set of LogQL alerts in
+  [`apps/otel-demo/k8s/loki-rules.yaml`](../../apps/otel-demo/k8s/loki-rules.yaml)
+  (e.g. "alert when the otel-demo error-log rate is high"). Turn up *simulated
+  errors* in the demo UI to watch them fire — they appear in
+  [Karma](./karma.md) next to the metric-based alerts.
 
 ## Try it
 

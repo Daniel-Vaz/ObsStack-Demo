@@ -36,8 +36,17 @@ func main() {
 	catalogURL := getenv("CATALOG_URL", "http://catalog:8080")
 	client := httpx.Client()
 
-	orders, err := otel.Meter("frontend").Int64Counter("demo_orders",
+	meter := otel.Meter("frontend")
+	orders, err := meter.Int64Counter("demo_orders",
 		metric.WithDescription("orders placed through the frontend"))
+	if err != nil {
+		panic(err)
+	}
+	// demo_order_errors_total: orders that failed end-to-end, including the
+	// simulated faults injected downstream. This is the ratio's numerator in the
+	// PrometheusRule (errors / (orders + errors)).
+	orderErrors, err := meter.Int64Counter("demo_order_errors",
+		metric.WithDescription("orders that failed (including simulated faults)"))
 	if err != nil {
 		panic(err)
 	}
@@ -60,21 +69,28 @@ func main() {
 	// business flow the loadgen and the UI's "Place order" button both drive.
 	httpx.Handle(mux, "/order", "GET /order", func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
+		route := metric.WithAttributes(attribute.String("route", "/order"))
+
+		// Simulated-failure probability from the web UI (?fail_rate=0..1),
+		// forwarded downstream to payment where the fault is injected.
+		failRate := httpx.FailRate(r, 0)
 
 		cat, err := httpx.Get(ctx, client, catalogURL+"/products")
 		if err != nil {
+			orderErrors.Add(ctx, 1, route)
 			telemetry.Log(ctx).Error("catalog call failed", "err", err)
 			http.Error(w, "catalog unavailable", http.StatusBadGateway)
 			return
 		}
-		out, err := httpx.Get(ctx, client, checkoutURL+"/checkout")
+		out, err := httpx.Get(ctx, client, httpx.WithFailRate(checkoutURL+"/checkout", failRate))
 		if err != nil {
+			orderErrors.Add(ctx, 1, route)
 			telemetry.Log(ctx).Error("checkout call failed", "err", err)
 			http.Error(w, "checkout unavailable", http.StatusBadGateway)
 			return
 		}
 
-		orders.Add(ctx, 1, metric.WithAttributes(attribute.String("route", "/order")))
+		orders.Add(ctx, 1, route)
 		telemetry.Log(ctx).Info("order placed", "catalog", cat, "checkout", out)
 		fmt.Fprintf(w, "order ok: %s | %s\n", cat, out)
 	})

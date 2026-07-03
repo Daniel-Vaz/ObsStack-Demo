@@ -1,0 +1,83 @@
+# Log-based alerts for the demo, evaluated by the Loki ruler (LogQL).
+#
+# Provisioning: Loki's chart runs a "rules sidecar" that watches for ConfigMaps
+# labelled `loki_rule` and syncs their files into the ruler's local store. That
+# sidecar runs in the *observability* namespace and, with namespaced RBAC, only
+# sees ConfigMaps there — so this object lives in `observability` (not
+# `otel-demo` like the rest of the app). It is still applied by `make demo`,
+# which runs `kubectl apply -f apps/otel-demo/k8s/` (namespace comes from the
+# manifest, not the flag).
+#
+# The `k8s-sidecar-target-directory` annotation steers the files into
+# `/rules/fake/` — auth is disabled cluster-wide so every tenant is "fake", and
+# the local ruler loads rules from `<store>/<tenant>/`.
+#
+# Fired alerts go to the same Alertmanager as the Prometheus rules
+# (see helm/loki/values.yaml -> rulerConfig.alertmanager_url), so they show up in
+# Karma alongside the metric-based ones. Turn up "simulated errors" in the web UI
+# to make them fire.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: loki-otel-demo-rules
+  namespace: observability
+  labels:
+    loki_rule: "true"
+    app.kubernetes.io/part-of: otel-demo
+  annotations:
+    k8s-sidecar-target-directory: /rules/fake
+data:
+  otel-demo-logs.yaml: |
+    groups:
+      - name: otel-demo-logs
+        rules:
+          # Sustained rate of ERROR-level log lines across the demo. The app logs
+          # slog JSON, so `| json` exposes the `level` field to filter on.
+          - alert: LokiOtelDemoHighErrorLogRate
+            expr: |
+              sum(rate({namespace="otel-demo"} | json | level="ERROR" [5m])) > 0.05
+            for: 2m
+            labels:
+              severity: warning
+              namespace: otel-demo
+              source: loki
+            annotations:
+              summary: High rate of ERROR logs in otel-demo
+              description: >-
+                otel-demo is logging errors at {{ printf "%.2f" $value }}/s over
+                the last 5m (threshold 0.05/s).
+
+          # Fraction of all otel-demo log lines that are errors. A ratio catches
+          # a problem even when overall traffic is low.
+          - alert: LokiOtelDemoErrorLogRatio
+            expr: |
+              sum(rate({namespace="otel-demo"} | json | level="ERROR" [5m]))
+                /
+              sum(rate({namespace="otel-demo"}[5m]))
+                > 0.05
+            for: 5m
+            labels:
+              severity: critical
+              namespace: otel-demo
+              source: loki
+            annotations:
+              summary: Errors are a large share of otel-demo logs
+              description: >-
+                {{ $value | humanizePercentage }} of otel-demo log lines are
+                errors over the last 5m (threshold 5%).
+
+          # Target the simulated fault specifically: payment declines logged by
+          # the payment service.
+          - alert: LokiOtelDemoPaymentDeclined
+            expr: |
+              sum(count_over_time({namespace="otel-demo", app="payment"} |= "payment declined" [5m])) > 0
+            for: 5m
+            labels:
+              severity: warning
+              namespace: otel-demo
+              source: loki
+            annotations:
+              summary: payment is logging declined charges
+              description: >-
+                {{ printf "%.0f" $value }} "payment declined" log lines in the
+                last 5m — simulated faults are turned up in the demo.

@@ -26,9 +26,31 @@ loki:
     retention_period: 72h
     reject_old_samples: false
     volume_enabled: true
-  # Keep pattern/ruler subsystems quiet in a single-node demo.
+  # Keep the pattern-ingester subsystem quiet in a single-node demo.
   pattern_ingester:
     enabled: false
+
+  # ---- Ruler: log-based alerting ------------------------------------------
+  # Loki's ruler evaluates LogQL alerting rules on a schedule and fires the
+  # results into Alertmanager — the same Alertmanager kube-prometheus-stack runs,
+  # so Loki alerts land next to Prometheus ones and show up in Karma.
+  #
+  # Rules are provisioned by the chart's rules sidecar (see `sidecar.rules`
+  # below): it watches for ConfigMaps labelled `loki_rule` and drops their files
+  # into `/rules`, which is the ruler's local store. With auth disabled every
+  # tenant is "fake", so files must land under `/rules/fake/` — the ConfigMap
+  # uses a `k8s-sidecar-target-directory` annotation to steer them there.
+  rulerConfig:
+    wal:
+      dir: /var/loki/ruler-wal
+    storage:
+      type: local
+      local:
+        directory: /rules
+    rule_path: /var/loki/ruler-tmp          # scratch dir; must differ from the store
+    alertmanager_url: http://kube-prometheus-stack-alertmanager.observability.svc.cluster.local:9093
+    enable_alertmanager_v2: true
+    enable_api: true                        # expose /loki/api/v1/rules
 
 singleBinary:
   replicas: 1
@@ -61,6 +83,19 @@ test:
   enabled: false
 minio:
   enabled: false
+
+# Rules sidecar: a small watcher (kiwigrid/k8s-sidecar) that syncs ConfigMaps
+# labelled `loki_rule` into the ruler's `/rules` directory and hot-reloads Loki.
+# It's enabled by default in the chart; we only point it at a target-directory
+# annotation so a ConfigMap can steer its files into the per-tenant `/rules/fake`
+# subfolder the local ruler expects. The rules themselves live in
+# apps/otel-demo/k8s/loki-rules.yaml.
+sidecar:
+  rules:
+    enabled: true
+    label: loki_rule
+    folder: /rules
+    folderAnnotation: k8s-sidecar-target-directory
 
 # Emit a ServiceMonitor so kube-prometheus-stack's Prometheus scrapes Loki.
 # Loki's own self-monitoring (its bundled agent) stays off — Prometheus is the
