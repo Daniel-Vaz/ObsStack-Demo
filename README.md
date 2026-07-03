@@ -17,8 +17,9 @@ web UIs are exposed as NodePort services and published on the
 host via kind `extraPortMappings`, so they're reachable directly on `localhost`
 (e.g. Grafana at `http://localhost:3000`, Headlamp at `http://localhost:4466`).
 
-![Grafana Kubernetes / Compute Resources / Cluster dashboard showing CPU and memory utilisation panels by namespace](docs/images/grafana-dashboard-example.png)
-*Grafana at `http://localhost:3000`, rendering a stock Kubernetes dashboard from metrics scraped by Prometheus and stored in Mimir — one of the many views this stack lights up.*
+>[!NOTE]
+>![Grafana Kubernetes / Compute Resources / Cluster dashboard showing CPU and memory utilisation panels by namespace](docs/images/grafana-dashboard-example.png)
+>*Grafana at `http://localhost:3000`, rendering a stock Kubernetes dashboard from metrics scraped by Prometheus and stored in Mimir — one of the many views this stack lights up.*
 
 ```
 ┌──────────────────────────────── kind cluster ─────────────────────────────────┐
@@ -69,7 +70,7 @@ make up          # create cluster + deploy stack + Alloy + validate
 make down        # delete the cluster
 ```
 
->[!NOTE]
+>[!TIP]
 >Run `make help` to see every target.
 
 ## What gets deployed
@@ -167,8 +168,9 @@ you place orders and drive load by hand — that's the default. A **`loadgen`** 
 included as an *optional* background traffic driver, **off by default**; deploy it
 with `DEMO_LOADGEN=true`.
 
-![otel-demo traffic console at localhost:8080 — Place order / Browse catalog / Send burst controls, a live request counter, and a response log](docs/images/oteldemoapp-ui.png)
-*The demo app's traffic console — place orders or flip on *Auto load* to generate the traces, metrics, logs, and profiles you then explore in Grafana.*
+>[!NOTE]
+>![otel-demo traffic console at localhost:8080 — Place order / Browse catalog / Send burst controls, a live request counter, and a response log](docs/images/oteldemoapp-ui.png)
+>*The demo app's traffic console — place orders or flip on *Auto load* to generate the traces, metrics, logs, and profiles you then explore in Grafana.*
 
 | Signal   | App emits | Stack collects |
 |----------|-----------|----------------|
@@ -198,8 +200,9 @@ then open Grafana (`http://localhost:3000`, admin/admin) and:
 - **Explore → Pyroscope**: flame graph for the `payment` service shows the CPU
   hot path.
 
-![Grafana Explore split view: a Tempo trace on the left linked to its correlated Loki log line on the right by trace_id](docs/images/grafana-traces-to-logs.png)
-*The payoff of a correlated stack: from a `frontend → checkout → payment / catalog` trace in Tempo (left), one click on `Logs for this span` lands on the exact log line in Loki (right), joined by `trace_id`.*
+>[!NOTE]
+>![Grafana Explore split view: a Tempo trace on the left linked to its correlated Loki log line on the right by trace_id](docs/images/grafana-traces-to-logs.png)
+>*The payoff of a correlated stack: from a `frontend → checkout → payment / catalog` trace in Tempo (left), one click on `Logs for this span` lands on the exact log line in Loki (right), joined by `trace_id`.*
 
 See [`apps/otel-demo/README.md`](apps/otel-demo/README.md) for the instrumentation
 walkthrough.
