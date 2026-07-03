@@ -9,6 +9,9 @@
 replicas: 1
 
 tempo:
+  # Serve TraceQL results (search + metrics) over HTTP streaming. Grafana's
+  # Tempo datasource and the Traces Drilldown app use this for the metrics API.
+  streamOverHttpEnabled: true
   # Enable the OTLP receivers (gRPC + HTTP) so Alloy can forward traces.
   receivers:
     otlp:
@@ -27,17 +30,37 @@ tempo:
         path: /var/tempo/wal
   # Generate service-graph and span metrics and remote-write them to Mimir
   # so the demo shows the traces->metrics correlation out of the box.
+  #
+  # `local-blocks` is the key one for the Traces Drilldown app: that app is
+  # query-less and renders RED metrics via Tempo's TraceQL metrics API
+  # (`{ } | rate()` etc.), which is only served when the local-blocks processor
+  # is active. Without it Drilldown shows "no data" even though traces are
+  # searchable in Explore.
   metricsGenerator:
     enabled: true
     remoteWriteUrl: "http://mimir-gateway.observability.svc.cluster.local/api/v1/push"
+    processor:
+      local_blocks:
+        # Persist local blocks so TraceQL metrics work over the full retention
+        # window, not just the most recent in-memory data.
+        flush_to_storage: true
+        # Keep client (non-server) spans too, so Drilldown can break down by
+        # any span, not only entry/root spans.
+        filter_server_spans: false
   resources:
     requests: { cpu: 100m, memory: 256Mi }
 
-# Enable overrides so the metrics-generator processors are active by default.
-global_overrides:
-  metrics_generator_processors:
-    - service-graphs
-    - span-metrics
+  # Which metrics-generator processors run. This chart reads the active
+  # processor list from `tempo.overrides.defaults` — a top-level
+  # `global_overrides` key is silently ignored, which is why the generator
+  # produced nothing before.
+  overrides:
+    defaults:
+      metrics_generator:
+        processors:
+          - service-graphs
+          - span-metrics
+          - local-blocks
 
 persistence:
   enabled: true
