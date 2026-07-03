@@ -1,0 +1,96 @@
+# Provisioning config for the file-based dashboard provider the k8s-sidecar
+# container (below) feeds. Mirrors the upstream grafana-operator
+# "configmaps_sidecar" example almost verbatim.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "grafana.fullname" . }}-dashboards-provisioning
+  labels:
+    {{- include "grafana.labels" . | nindent 4 }}
+data:
+  provisioning.yaml: |-
+    apiVersion: 1
+    providers:
+      - name: 'configmap-dashboard-provider'
+        orgId: 1
+        folder: ''
+        folderUid: ''
+        type: file
+        disableDeletion: false
+        updateIntervalSeconds: 10
+        allowUiUpdates: false
+        options:
+          path: /var/lib/grafana/dashboards
+          foldersFromFilesStructure: true
+---
+apiVersion: grafana.integreatly.org/v1beta1
+kind: Grafana
+metadata:
+  name: {{ include "grafana.fullname" . }}
+  labels:
+    {{- include "grafana.labels" . | nindent 4 }}
+    {{- include "grafana.instanceSelectorLabels" . | nindent 4 }}
+spec:
+  config:
+    log:
+      mode: "console"
+    security:
+      admin_user: {{ .Values.adminUser | quote }}
+      admin_password: {{ .Values.adminPassword | quote }}
+
+  # Exposed to the host as a NodePort. Note the generated Service is named
+  # "<release>-service" (an Operator naming convention, not this chart's
+  # choice) — see scripts/validate.sh and helm/kagent/values.yaml, which
+  # reference it by that name.
+  service:
+    spec:
+      type: NodePort
+      ports:
+        - name: grafana
+          protocol: TCP
+          port: 3000
+          targetPort: grafana-http
+          nodePort: {{ .Values.service.nodePort }}
+
+  deployment:
+    spec:
+      template:
+        spec:
+          # The k8s-sidecar watches every namespace for
+          # ConfigMaps labelled grafana_dashboard=1 (how kube-prometheus-stack
+          # ships its bundled default dashboards) and drops each as a JSON
+          # file under /var/lib/grafana/dashboards, which Grafana's own
+          # file-based provisioner (config'd via the ConfigMap above) loads.
+          volumes:
+            - name: sidecar-dashboards
+              emptyDir: {}
+            - name: dashboards-provisioning
+              configMap:
+                name: {{ include "grafana.fullname" . }}-dashboards-provisioning
+          containers:
+            - name: grafana
+              volumeMounts:
+                - name: sidecar-dashboards
+                  mountPath: /var/lib/grafana/dashboards
+                - name: dashboards-provisioning
+                  mountPath: /etc/grafana/provisioning/dashboards
+              resources:
+                {{- toYaml .Values.resources | nindent 16 }}
+            - name: k8s-sidecar
+              image: {{ .Values.sidecar.image }}
+              env:
+                - name: LABEL
+                  value: grafana_dashboard
+                - name: LABEL_VALUE
+                  value: "1"
+                - name: FOLDER
+                  value: /var/lib/grafana/dashboards
+                - name: NAMESPACE
+                  value: ALL
+                - name: RESOURCE
+                  value: configmap
+              volumeMounts:
+                - name: sidecar-dashboards
+                  mountPath: /var/lib/grafana/dashboards
+              resources:
+                {{- toYaml .Values.sidecar.resources | nindent 16 }}

@@ -1,0 +1,26 @@
+{{- range .Values.datasources }}
+---
+apiVersion: grafana.integreatly.org/v1beta1
+kind: GrafanaDatasource
+metadata:
+  name: {{ .uid }}
+  labels:
+    {{- include "grafana.labels" $ | nindent 4 }}
+spec:
+  uid: {{ .uid }}
+  instanceSelector:
+    matchLabels:
+      {{- include "grafana.instanceSelectorLabels" $ | nindent 6 }}
+  datasource:
+    name: {{ .name }}
+    type: {{ .type }}
+    access: proxy
+    url: {{ .url }}
+    {{- if .isDefault }}
+    isDefault: true
+    {{- end }}
+    {{- if .jsonData }}
+    jsonData:
+      {{- toYaml .jsonData | nindent 6 }}
+    {{- end }}
+{{- end }}

@@ -1,9 +1,12 @@
 # kind cluster for the Grafana LGTM demo.
-# Single control-plane node keeps the footprint minimal. The Grafana and Alloy
-# web UIs are exposed as NodePort services; these extraPortMappings publish the
-# node ports on the host so the UIs are reachable at http://localhost:<port>
-# with no port-forward (works on WSL2 + rootless Podman, where the container
-# network itself isn't host-routable). The nodePorts match helm/*/values.yaml.
+# Single control-plane node keeps the footprint minimal. The web UIs are
+# exposed as NodePort services; these extraPortMappings publish the node
+# ports on the host so the UIs are reachable at http://localhost:<port> with
+# no port-forward (works on WSL2 + rootless Podman, where the container
+# network itself isn't host-routable). The nodePorts match helm/*/values.yaml
+# — except kagent UI's, which is a supplementary Service
+# (helm/kagent/kagent-ui-nodeport.yaml) alongside the kagent chart, which has
+# no pinned-nodePort field of its own.
 kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4
 name: observability-demo
@@ -24,3 +27,5 @@ nodes:
         hostPort: 4466
       - containerPort: 30081   # Karma alert UI   -> http://localhost:8081
         hostPort: 8081
+      - containerPort: 30890   # kagent UI        -> http://localhost:8090
+        hostPort: 8090

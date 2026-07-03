@@ -1,0 +1,28 @@
+# Extends the Grafana pod's own ServiceAccount (created by the Operator as
+# "<release>-sa") so the k8s-sidecar container (templates/grafana.yaml) can
+# watch ConfigMaps cluster-wide for the grafana_dashboard=1 label.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "grafana.fullname" . }}-sidecar
+  labels:
+    {{- include "grafana.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "watch", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "grafana.fullname" . }}-sidecar
+  labels:
+    {{- include "grafana.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "grafana.fullname" . }}-sidecar
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "grafana.fullname" . }}-sa
+    namespace: {{ .Release.Namespace }}

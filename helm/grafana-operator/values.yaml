@@ -1,0 +1,19 @@
+# Grafana Operator (https://github.com/grafana/grafana-operator) — the
+# controller that reconciles the CRs in helm/grafana (Grafana, GrafanaDatasource,
+# GrafanaServiceAccount, ...) into an actual running Grafana instance. Deployed
+# once, cluster-wide, before helm/grafana's CRs can be applied — see the
+# Makefile's `grafana-operator` -> `grafana` ordering.
+#
+# Cluster-scoped by default (namespaceScope: false), same posture as
+# kube-prometheus-stack's own Operator, which also reconciles CRs
+# (ServiceMonitor/PodMonitor/PrometheusRule) across every namespace in this
+# demo.
+
+resources:
+  requests: { cpu: 50m, memory: 64Mi }
+
+# Emit a ServiceMonitor so the metrics collector (Alloy by default, or
+# kube-prometheus-stack's Prometheus in the METRICS_MODE=prometheus toggle)
+# scrapes the operator itself.
+serviceMonitor:
+  enabled: true

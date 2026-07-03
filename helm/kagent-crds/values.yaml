@@ -1,0 +1,9 @@
+# CRDs for kagent (https://github.com/kagent-dev/kagent/tree/main/helm/kagent-crds).
+# Helm doesn't manage CRD lifecycle for regular charts, so kagent ships CRDs
+# as a separate chart by convention — this must be installed before
+# helm/kagent (see the Makefile's `kagent-crds` -> `kagent` ordering).
+#
+# kmcp-crds disabled to match kmcp.enabled: false in helm/kagent/values.yaml
+# (this demo doesn't use kagent's custom MCP-server-building tooling).
+kmcp:
+  enabled: false

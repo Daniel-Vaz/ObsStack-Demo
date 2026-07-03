@@ -1,0 +1,11 @@
+apiVersion: v2
+name: grafana
+description: Grafana, deployed and fully managed by the Grafana Operator via CRDs
+type: application
+# Chart version is local to this repo. Requires helm/grafana-operator
+# installed first (CRDs owner) — see the Makefile's `grafana-operator` ->
+# `grafana` ordering.
+version: 0.1.0
+home: https://github.com/grafana/grafana-operator
+sources:
+  - https://github.com/grafana/grafana-operator

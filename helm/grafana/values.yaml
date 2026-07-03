@@ -1,114 +1,120 @@
-# Grafana — wired to the LGTM stack via provisioned datasources.
+# Grafana — deployed and fully managed by the Grafana Operator
+# (https://github.com/grafana/grafana-operator) via CRDs (see templates/),
+# rather than the grafana-community/grafana Helm chart. Requires
+# helm/grafana-operator installed first (the CRDs' owner) — see the
+# Makefile's `grafana-operator` -> `grafana` ordering.
 #
 # Login: admin / admin (demo only). Reach the UI with `make grafana-ui`.
 
 adminUser: admin
 adminPassword: admin
 
-persistence:
-  enabled: false # ephemeral is fine; everything is provisioned as code
-
 # Exposed to the host as a NodePort. The kind node maps hostPort 3000 ->
 # containerPort 30000 (see kind/cluster.yaml extraPortMappings), so the UI is
-# reachable at http://localhost:3000 with no port-forward.
+# reachable at http://localhost:3000 with no port-forward. Unlike this repo's
+# other NodePort UIs, the backing Service isn't named after the release —
+# it's "<release>-service" (grafana-service), a grafana-operator naming
+# convention this chart doesn't control (see scripts/validate.sh).
 service:
-  type: NodePort
-  port: 80
   nodePort: 30000
 
 resources:
   requests: { cpu: 100m, memory: 128Mi }
 
-# Provisioned datasources for all four signals, with cross-signal correlations.
-datasources:
-  datasources.yaml:
-    apiVersion: 1
-    datasources:
-      - name: Mimir
-        type: prometheus
-        uid: mimir
-        access: proxy
-        url: http://mimir-gateway.observability.svc.cluster.local/prometheus
-        isDefault: true
-        jsonData:
-          prometheusType: Mimir
-          timeInterval: 15s
-          # Mimir's ruler is enabled by default (METRICS_MODE=alloy; see
-          # helm/mimir/values.yaml) — Alloy syncs PrometheusRules into it and it
-          # evaluates them against the kube-prometheus-stack Alertmanager, so
-          # let Grafana Alerting manage/show those rules too. The
-          # values-prometheus-metrics.yaml overlay flips this back to false for
-          # the METRICS_MODE=prometheus toggle, where the ruler is disabled and
-          # this probe would otherwise 502.
-          manageAlerts: true
-
-      - name: Loki
-        type: loki
-        uid: loki
-        access: proxy
-        url: http://loki.observability.svc.cluster.local:3100
-        jsonData:
-          # Turn a "trace_id" field in logs into a link to the Tempo trace.
-          derivedFields:
-            - name: trace_id
-              matcherRegex: '"?trace_id"?[:=]"?(\w+)"?'
-              datasourceUid: tempo
-              url: '$${__value.raw}'
-
-      - name: Tempo
-        type: tempo
-        uid: tempo
-        access: proxy
-        url: http://tempo.observability.svc.cluster.local:3200
-        jsonData:
-          # trace -> logs (jump to Loki filtered by the trace's service)
-          tracesToLogsV2:
-            datasourceUid: loki
-            filterByTraceID: true
-            spanStartTimeShift: "-2s"
-            spanEndTimeShift: "2s"
-            tags:
-              - key: service.name
-                value: service_name
-          # trace -> metrics (span/service-graph metrics live in Mimir)
-          tracesToMetrics:
-            datasourceUid: mimir
-          # trace -> profiles
-          tracesToProfiles:
-            datasourceUid: pyroscope
-          serviceMap:
-            datasourceUid: mimir
-          nodeGraph:
-            enabled: true
-
-      - name: Pyroscope
-        type: grafana-pyroscope-datasource
-        uid: pyroscope
-        access: proxy
-        url: http://pyroscope.observability.svc.cluster.local:4040
-
-      # Alertmanager deployed by kube-prometheus-stack. Lets Grafana's Alerting
-      # UI browse the alerts, silences and groups held in KPS's Alertmanager.
-      - name: Alertmanager
-        type: alertmanager
-        uid: alertmanager
-        access: proxy
-        url: http://kube-prometheus-stack-alertmanager.observability.svc.cluster.local:9093
-        jsonData:
-          implementation: prometheus
-          # Let Grafana surface KPS/Prometheus alerts against this Alertmanager.
-          handleGrafanaManagedAlerts: false
-
-# Load dashboards dropped into ConfigMaps labelled grafana_dashboard=1.
+# k8s-sidecar watches every namespace for ConfigMaps labelled
+# grafana_dashboard=1 — this is how kube-prometheus-stack's bundled default
+# dashboards reach Grafana — and materializes them as dashboard JSON files
+# under a directory Grafana's own file-based provisioner reads (see
+# templates/grafana.yaml). Same mechanism, same image, as the
+# grafana-community/grafana chart's built-in `sidecar.dashboards` uses.
 sidecar:
-  dashboards:
-    enabled: true
-    label: grafana_dashboard
-    labelValue: "1"
-    searchNamespace: ALL
+  image: quay.io/kiwigrid/k8s-sidecar:2.8.1
+  resources:
+    requests: { cpu: 25m, memory: 32Mi }
 
-# Emit a ServiceMonitor so the metrics collector (Alloy by default, or
-# kube-prometheus-stack's Prometheus in the METRICS_MODE=prometheus toggle)
-# scrapes Grafana (Grafana serves /metrics on its HTTP port 3000).
-serviceMonitor:
-  enabled: true
+# Provisioned datasources for all four signals, with cross-signal
+# correlations. One GrafanaDatasource CR per entry (see
+# templates/datasources.yaml) — access is always "proxy", hardcoded there.
+datasources:
+  - name: Mimir
+    uid: mimir
+    type: prometheus
+    url: http://mimir-gateway.observability.svc.cluster.local/prometheus
+    isDefault: true
+    jsonData:
+      prometheusType: Mimir
+      timeInterval: 15s
+      # Mimir's ruler is enabled by default (METRICS_MODE=alloy; see
+      # helm/mimir/values.yaml) — Alloy syncs PrometheusRules into it and it
+      # evaluates them against the kube-prometheus-stack Alertmanager, so
+      # let Grafana Alerting manage/show those rules too. The
+      # values-prometheus-metrics.yaml overlay flips this back to false for
+      # the METRICS_MODE=prometheus toggle, where the ruler is disabled and
+      # this probe would otherwise 502.
+      manageAlerts: true
+
+  - name: Loki
+    uid: loki
+    type: loki
+    url: http://loki.observability.svc.cluster.local:3100
+    jsonData:
+      # Turn a "trace_id" field in logs into a link to the Tempo trace.
+      derivedFields:
+        - name: trace_id
+          matcherRegex: '"?trace_id"?[:=]"?(\w+)"?'
+          datasourceUid: tempo
+          url: '${__value.raw}'
+
+  - name: Tempo
+    uid: tempo
+    type: tempo
+    url: http://tempo.observability.svc.cluster.local:3200
+    jsonData:
+      # trace -> logs (jump to Loki filtered by the trace's service)
+      tracesToLogsV2:
+        datasourceUid: loki
+        filterByTraceID: true
+        spanStartTimeShift: "-2s"
+        spanEndTimeShift: "2s"
+        tags:
+          - key: service.name
+            value: service_name
+      # trace -> metrics (span/service-graph metrics live in Mimir)
+      tracesToMetrics:
+        datasourceUid: mimir
+      # trace -> profiles
+      tracesToProfiles:
+        datasourceUid: pyroscope
+      serviceMap:
+        datasourceUid: mimir
+      nodeGraph:
+        enabled: true
+
+  - name: Pyroscope
+    uid: pyroscope
+    type: grafana-pyroscope-datasource
+    url: http://pyroscope.observability.svc.cluster.local:4040
+
+  # Alertmanager deployed by kube-prometheus-stack. Lets Grafana's Alerting
+  # UI browse the alerts, silences and groups held in KPS's Alertmanager.
+  - name: Alertmanager
+    uid: alertmanager
+    type: alertmanager
+    url: http://kube-prometheus-stack-alertmanager.observability.svc.cluster.local:9093
+    jsonData:
+      implementation: prometheus
+      # Let Grafana surface KPS/Prometheus alerts against this Alertmanager.
+      handleGrafanaManagedAlerts: false
+
+# kagent's grafana-mcp (see helm/kagent/values.yaml) needs a Grafana
+# service-account token to call the Grafana API. The GrafanaServiceAccount CR
+# in templates/serviceaccount.yaml provisions that token declaratively — the
+# Operator creates the service account, generates the token, and writes it
+# straight into this Secret (key "token", the Operator's own fixed key name).
+# helm/kagent/values.yaml's grafana-mcp config maps that key to the
+# GRAFANA_SERVICE_ACCOUNT_TOKEN_FILE env var mcp-grafana reads, via a mounted
+# volume — see the comment there for why (mcp-grafana's own Secret template
+# expects a differently-named key that the Operator has no way to produce).
+grafanaMcp:
+  serviceAccountName: kagent-grafana-mcp
+  tokenSecretName: kagent-grafana-mcp-token

@@ -1,0 +1,172 @@
+# kagent — Kubernetes-native AI agent framework (https://github.com/kagent-dev/kagent)
+#
+# The point of deploying kagent + Ollama in this demo is a single Kubernetes
+# observability AI agent expert — ObsAgent — that can query this stack's own
+# live telemetry (Mimir/Loki/Tempo/Pyroscope via Grafana, plus the cluster
+# itself) and act on what it finds — not a chatbot bolted on the side.
+# ObsAgent is defined separately, as a raw Agent CRD manifest (see
+# helm/kagent/obs-agent.yaml and the "AGENTS" section below); this file sets
+# up everything it needs: the controller/UI/tools runtime, a local model via
+# Ollama (helm/ollama/values.yaml, no paid LLM API key), and OpenTelemetry
+# tracing/logging into this stack's own Alloy collector, so the agent's own
+# behavior is as observable as anything else here.
+#
+# Optional, NOT part of `make up` — see the Makefile's `ai` target. Even at
+# this stage it's the heaviest thing in the repo (Ollama alone wants
+# multiple CPUs and several GiB of RAM); deploy it deliberately with `make ai`.
+#
+# Requires helm/kagent-crds and helm/grafana installed first — see the
+# Makefile's `kagent-crds`/`grafana` -> `kagent` ordering (grafana-mcp below
+# needs the Secret helm/grafana's GrafanaServiceAccount CR produces).
+#
+# Web UI: the kagent chart's own UI Service has no pinned-nodePort field
+# (only `type`), unlike this repo's other charts — so the Makefile's `kagent`
+# target applies a small supplementary NodePort Service alongside it
+# (kagent-ui-nodeport.yaml, same selector) to still get a fixed kind
+# extraPortMapping. Reachable at http://localhost:8090 (`make kagent-ui`).
+
+# ==============================================================================
+# LLM PROVIDER — local Ollama, no API key required
+# ==============================================================================
+providers:
+  default: ollama
+  ollama:
+    provider: Ollama
+    model: "llama3.1:8b"
+    config:
+      # In-cluster Service DNS for helm/ollama (same "observability" namespace).
+      host: ollama.observability.svc.cluster.local:11434
+      options:
+        # Explicit override: Helm deep-merges this map with the kagent chart's
+        # own default (num_ctx: "64000", sized for llama3.2's larger context
+        # handling), and 64K tokens of KV-cache on CPU-only inference would
+        # blow well past helm/ollama/values.yaml's 8Gi memory limit. 4096 is
+        # plenty for a chat demo.
+        num_ctx: "4096"
+
+# ==============================================================================
+# OBSERVABILITY — traces + logs into the stack's own Alloy collector
+# ==============================================================================
+# Same OTLP/gRPC endpoint the otel-demo app uses (apps/otel-demo/k8s/*.yaml):
+# Alloy's OTLP receiver on :4317. Traces flow straight through Alloy's
+# existing otelcol pipeline to Tempo. Logs needed a small addition to Alloy's
+# config (helm/alloy/values.yaml's otelcol.exporter.loki bridge) since its
+# OTLP receiver previously only forwarded traces.
+otel:
+  tracing:
+    enabled: true
+    exporter:
+      otlp:
+        endpoint: "http://alloy.observability.svc.cluster.local:4317"
+        protocol: "grpc"
+        insecure: true
+  logging:
+    enabled: true
+    exporter:
+      otlp:
+        endpoint: "http://alloy.observability.svc.cluster.local:4317"
+        insecure: true
+
+# kagent-tools (the built-in MCP tool server k8s-agent calls into) has its
+# own, separate otel block — it is NOT covered by the top-level otel.* above.
+kagent-tools:
+  otel:
+    tracing:
+      enabled: true
+      exporter:
+        otlp:
+          endpoint: "http://alloy.observability.svc.cluster.local:4317"
+          insecure: true
+
+# ==============================================================================
+# AGENTS — none of the chart's built-in agents; a custom one instead
+# ==============================================================================
+# None of the chart's stock agents are enabled (see below) — this demo runs
+# a single purpose-built agent instead: ObsAgent, the Kubernetes
+# observability expert this whole deploy exists for. It's defined as a raw
+# Agent CRD manifest, not a Helm value, since the kagent chart is
+# OCI-sourced with nowhere local to template it — see
+# helm/kagent/obs-agent.yaml (applied by the Makefile's `kagent` target
+# right after this chart installs) for the full definition: system prompt,
+# tool selection (Kubernetes/Helm/Prometheus tools from kagent's own tool
+# server, plus every tool grafana-mcp exposes), and A2A skills.
+#
+# The chart's own built-in agents are explicitly disabled rather than left
+# at their defaults, including the two that would otherwise be closest to
+# ObsAgent's job (k8s-agent, observability-agent) — each is its own
+# always-on Deployment, and this demo would rather spend that pod budget on
+# ObsAgent than on stock ones covering overlapping ground.
+k8s-agent:
+  enabled: false
+observability-agent:
+  enabled: false
+
+# grafana-mcp: the MCP tool server giving read/query access to Grafana
+# dashboards, datasources, and alerts — ObsAgent's (helm/kagent/obs-agent.yaml)
+# main tool server, reaching this stack's own Mimir/Loki/Tempo/Pyroscope data
+# through Grafana.
+grafana-mcp:
+  enabled: true
+  grafana:
+    # helm/grafana's Service is named "grafana-service" (a grafana-operator
+    # naming convention — see helm/grafana/templates/grafana.yaml), not
+    # "grafana", and listens on port 3000 only (its NodePort 30000 maps to
+    # that, not to 80) — both needed here since mcp-grafana's HTTP client
+    # takes this URL as-is with no port default beyond the scheme's (80).
+    # No "/api" suffix: mcp-grafana appends "/api/..." to this URL itself
+    # (see grafana/mcp-grafana's tools/datasources.go) — adding it here
+    # doubled the path (".../api/api/datasources") and, combined with the
+    # missing port, made every request dial the Service's nonexistent :80
+    # and hang until timeout ("failed to discover MCP datasources ...
+    # dial tcp ...:80: i/o timeout").
+    url: "http://grafana-service.observability.svc.cluster.local:3000"
+  config:
+    # mcp-grafana supports reading its token from a file via this env var
+    # (see grafana/mcp-grafana's mcpgrafana.go). Used instead of
+    # grafana.secretRef because the Operator-generated Secret
+    # (helm/grafana/templates/serviceaccount.yaml) stores the token under a
+    # fixed key name ("token", set by the Operator's own controller code)
+    # that this chart's secretRef mechanism can't target — it only reads a
+    # secret key literally named GRAFANA_SERVICE_ACCOUNT_TOKEN.
+    GRAFANA_SERVICE_ACCOUNT_TOKEN_FILE: /etc/grafana-sa/token
+  volumes:
+    - name: grafana-sa-token
+      secret:
+        secretName: kagent-grafana-mcp-token
+  volumeMounts:
+    - name: grafana-sa-token
+      mountPath: /etc/grafana-sa
+      readOnly: true
+  # mcp-grafana's streamable-http transport validates the HTTP Host header
+  # against an allowlist that defaults to loopback variants of --address
+  # (localhost/127.0.0.1) — appropriate when a browser might reach it, but
+  # kagent's controller calls it over the in-cluster Service DNS name
+  # (kagent-grafana-mcp.observability:8000), which isn't in that default
+  # list, so every call gets rejected with a flat "Forbidden" (see
+  # grafana/mcp-grafana's --allowed-hosts flag). This server has no NodePort
+  # and is never reached from a browser, so the DNS-rebinding attack this
+  # defends against doesn't apply here — safe to disable.
+  args:
+    - --allowed-hosts=*
+    - --allowed-origins=*
+
+kmcp:
+  enabled: false
+querydoc:
+  enabled: false
+kgateway-agent:
+  enabled: false
+istio-agent:
+  enabled: false
+promql-agent:
+  enabled: false
+argo-rollouts-agent:
+  enabled: false
+helm-agent:
+  enabled: false
+cilium-policy-agent:
+  enabled: false
+cilium-manager-agent:
+  enabled: false
+cilium-debug-agent:
+  enabled: false

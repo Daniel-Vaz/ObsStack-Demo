@@ -1,79 +1,64 @@
 # Overlay applied on top of values.yaml only when METRICS_MODE=prometheus
-# (see the Makefile). `datasources.datasources.yaml.datasources` is a YAML
-# list, and Helm replaces whole lists on override rather than merging by
-# entry — so this overlay must repeat the *entire* datasources list, not just
-# the one field that changes. The only difference from values.yaml is the
-# Mimir entry's `manageAlerts: false`: in this legacy toggle, Mimir's ruler is
-# disabled (helm/mimir/values-prometheus-metrics.yaml), so Grafana Alerting
-# must not probe/manage rules against it (that would 502).
+# (see the Makefile). `datasources` is a YAML list, and Helm replaces whole
+# lists on override rather than merging by entry — so this overlay must
+# repeat the *entire* datasources list, not just the one field that changes.
+# The only difference from values.yaml is the Mimir entry's
+# `manageAlerts: false`: in this legacy toggle, Mimir's ruler is disabled
+# (helm/mimir/values-prometheus-metrics.yaml), so Grafana Alerting must not
+# probe/manage rules against it (that would 502).
 datasources:
-  datasources.yaml:
-    apiVersion: 1
-    datasources:
-      - name: Mimir
-        type: prometheus
-        uid: mimir
-        access: proxy
-        url: http://mimir-gateway.observability.svc.cluster.local/prometheus
-        isDefault: true
-        jsonData:
-          prometheusType: Mimir
-          timeInterval: 15s
-          manageAlerts: false
+  - name: Mimir
+    uid: mimir
+    type: prometheus
+    url: http://mimir-gateway.observability.svc.cluster.local/prometheus
+    isDefault: true
+    jsonData:
+      prometheusType: Mimir
+      timeInterval: 15s
+      manageAlerts: false
 
-      - name: Loki
-        type: loki
-        uid: loki
-        access: proxy
-        url: http://loki.observability.svc.cluster.local:3100
-        jsonData:
-          # Turn a "trace_id" field in logs into a link to the Tempo trace.
-          derivedFields:
-            - name: trace_id
-              matcherRegex: '"?trace_id"?[:=]"?(\w+)"?'
-              datasourceUid: tempo
-              url: '$${__value.raw}'
+  - name: Loki
+    uid: loki
+    type: loki
+    url: http://loki.observability.svc.cluster.local:3100
+    jsonData:
+      derivedFields:
+        - name: trace_id
+          matcherRegex: '"?trace_id"?[:=]"?(\w+)"?'
+          datasourceUid: tempo
+          url: '${__value.raw}'
 
-      - name: Tempo
-        type: tempo
-        uid: tempo
-        access: proxy
-        url: http://tempo.observability.svc.cluster.local:3200
-        jsonData:
-          # trace -> logs (jump to Loki filtered by the trace's service)
-          tracesToLogsV2:
-            datasourceUid: loki
-            filterByTraceID: true
-            spanStartTimeShift: "-2s"
-            spanEndTimeShift: "2s"
-            tags:
-              - key: service.name
-                value: service_name
-          # trace -> metrics (span/service-graph metrics live in Mimir)
-          tracesToMetrics:
-            datasourceUid: mimir
-          # trace -> profiles
-          tracesToProfiles:
-            datasourceUid: pyroscope
-          serviceMap:
-            datasourceUid: mimir
-          nodeGraph:
-            enabled: true
+  - name: Tempo
+    uid: tempo
+    type: tempo
+    url: http://tempo.observability.svc.cluster.local:3200
+    jsonData:
+      tracesToLogsV2:
+        datasourceUid: loki
+        filterByTraceID: true
+        spanStartTimeShift: "-2s"
+        spanEndTimeShift: "2s"
+        tags:
+          - key: service.name
+            value: service_name
+      tracesToMetrics:
+        datasourceUid: mimir
+      tracesToProfiles:
+        datasourceUid: pyroscope
+      serviceMap:
+        datasourceUid: mimir
+      nodeGraph:
+        enabled: true
 
-      - name: Pyroscope
-        type: grafana-pyroscope-datasource
-        uid: pyroscope
-        access: proxy
-        url: http://pyroscope.observability.svc.cluster.local:4040
+  - name: Pyroscope
+    uid: pyroscope
+    type: grafana-pyroscope-datasource
+    url: http://pyroscope.observability.svc.cluster.local:4040
 
-      # Alertmanager deployed by kube-prometheus-stack. Lets Grafana's Alerting
-      # UI browse the alerts, silences and groups held in KPS's Alertmanager.
-      - name: Alertmanager
-        type: alertmanager
-        uid: alertmanager
-        access: proxy
-        url: http://kube-prometheus-stack-alertmanager.observability.svc.cluster.local:9093
-        jsonData:
-          implementation: prometheus
-          # Let Grafana surface KPS/Prometheus alerts against this Alertmanager.
-          handleGrafanaManagedAlerts: false
+  - name: Alertmanager
+    uid: alertmanager
+    type: alertmanager
+    url: http://kube-prometheus-stack-alertmanager.observability.svc.cluster.local:9093
+    jsonData:
+      implementation: prometheus
+      handleGrafanaManagedAlerts: false

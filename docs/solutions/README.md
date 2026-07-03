@@ -29,6 +29,8 @@ logs, traces, profiles — plus the plumbing to collect, store, and view them.
 | [Alloy](./alloy.md) | Collection pipeline | One agent that collects logs, traces, profiles, *and metrics* by default |
 | [Karma](./karma.md) | Alert dashboard (legacy toggle only) | Read-only UI over Alertmanager — every alert in one groupable view |
 | [Headlamp](./headlamp.md) | Cluster UI | Point-and-click Kubernetes dashboard |
+| [Ollama](./ollama.md) | Local LLM inference | Runs `llama3.1:8b` locally — no external AI API key needed |
+| [kagent](./kagent.md) | AI agent framework | Chat with agents that can inspect this cluster and query this Grafana |
 | [Kind & Podman](./kind-and-podman.md) | Local platform | A throwaway Kubernetes cluster on your laptop |
 
 Grafana itself isn't covered separately — it's the **single pane of glass** that

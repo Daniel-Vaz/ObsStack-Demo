@@ -6,7 +6,9 @@
 # (prometheus.remote_write / prometheus.operator.* / mimir.rules.kubernetes)
 # from values.yaml deliberately left out: in this legacy toggle, kube-
 # prometheus-stack's own Prometheus (values-prometheus-metrics.yaml in that
-# chart) owns metrics and rule evaluation instead.
+# chart) owns metrics and rule evaluation instead. Kept in lockstep with
+# values.yaml's OTLP-logs-to-Loki bridge (kagent) below, since only metrics
+# differs between the two modes.
 
 controller:
   type: daemonset
@@ -130,6 +132,7 @@ alloy:
         }
         output {
           traces = [otelcol.processor.batch.default.input]
+          logs   = [otelcol.processor.attributes.otlp_logs.input]
         }
       }
 
@@ -146,6 +149,30 @@ alloy:
             insecure = true
           }
         }
+      }
+
+      // ========================================================================
+      // OTLP LOGS  ->  Loki
+      // kagent (helm/kagent/values.yaml) emits its own logs over OTLP rather
+      // than only stdout, using the same receiver as traces above. Promote
+      // service.name/service.namespace resource attributes to Loki labels
+      // (otelcol.exporter.loki needs the "loki.resource.labels" hint --
+      // it doesn't map OTLP attributes to labels on its own) and forward into
+      // the same Loki write path pod logs already use.
+      // ========================================================================
+      otelcol.processor.attributes "otlp_logs" {
+        action {
+          key    = "loki.resource.labels"
+          action = "insert"
+          value  = "service.name, service.namespace"
+        }
+        output {
+          logs = [otelcol.exporter.loki.default.input]
+        }
+      }
+
+      otelcol.exporter.loki "default" {
+        forward_to = [loki.write.default.receiver]
       }
 
       // ========================================================================

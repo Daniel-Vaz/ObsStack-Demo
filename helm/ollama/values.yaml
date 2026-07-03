@@ -1,0 +1,48 @@
+# Ollama — local LLM inference server (https://github.com/otwld/ollama-helm)
+#
+# Serves the llama3.1:8b model over Ollama's native REST API on :11434. kagent
+# (helm/kagent/values.yaml) uses it as its default model provider, so this
+# demo needs no external LLM API key.
+#
+# Lightweight/demo trade-offs:
+#   - CPU inference only (no GPU) — fine for an occasional demo query from
+#     kagent's k8s-agent, not for load testing.
+#   - No PersistentVolume: the model is pulled into the container filesystem
+#     by the postStart hook below on every pod start (~4.7GB download). A PVC
+#     wouldn't survive `make down` anyway on this kind/Podman setup (the
+#     default local-path-provisioner backing store lives inside the kind node
+#     container), so we accept the re-pull cost instead of adding a PVC that
+#     would only help across in-cluster pod restarts. Flip
+#     `persistentVolume.enabled: true` (+ `.size`) if you want that.
+#   - No web UI to expose — kagent reaches Ollama cluster-internally at
+#     ollama.observability.svc.cluster.local:11434.
+
+image:
+  pullPolicy: IfNotPresent
+
+ollama:
+  port: 11434
+  models:
+    # Pulled via a postStart hook the first time the pod starts. Kubernetes
+    # doesn't mark the container "Running" (so readiness probing, and thus
+    # `helm --wait`) until this hook completes — see the Makefile's
+    # `ollama` target, which uses a longer OLLAMA_TIMEOUT to cover it.
+    pull:
+      - llama3.1:8b
+    # Also load it into memory at startup so the first kagent request isn't
+    # additionally slowed by a cold model load.
+    run:
+      - llama3.1:8b
+
+resources:
+  requests:
+    cpu: 2000m
+    memory: 4096Mi
+  limits:
+    cpu: 4000m
+    memory: 8192Mi
+
+# Cluster-internal only.
+service:
+  type: ClusterIP
+  port: 11434

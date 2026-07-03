@@ -25,7 +25,7 @@ else
 fi
 
 info "Checking helm releases are deployed..."
-releases=(kube-prometheus-stack mimir loki tempo pyroscope grafana alloy headlamp)
+releases=(kube-prometheus-stack mimir loki tempo pyroscope grafana alloy headlamp ollama kagent-crds kagent)
 [[ "$METRICS_MODE" == "prometheus" ]] && releases+=(karma)
 for r in "${releases[@]}"; do
   status="$(helm status "$r" -n "$NAMESPACE" -o json 2>/dev/null | grep -o '"status":"[^"]*"' | head -1)"
@@ -82,7 +82,7 @@ for d in json.load(sys.stdin):
   done <<< "$pairs"
   return $rc
 }
-if ! with_port_forward svc/grafana 80 -- grafana_datasource_health; then
+if ! with_port_forward svc/grafana-service 3000 -- grafana_datasource_health; then
   FAILS=$((FAILS+1))
 fi
 

@@ -1,0 +1,16 @@
+# Emit a ServiceMonitor so the metrics collector (Alloy by default, or
+# kube-prometheus-stack's Prometheus in the METRICS_MODE=prometheus toggle)
+# scrapes Grafana (Grafana serves /metrics on its HTTP port).
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "grafana.fullname" . }}
+  labels:
+    {{- include "grafana.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "grafana.instanceSelectorLabels" . | nindent 6 }}
+  endpoints:
+    - port: grafana
+      path: /metrics
