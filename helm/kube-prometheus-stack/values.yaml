@@ -118,6 +118,20 @@ prometheus:
     podMonitorSelector: {}
     podMonitorNamespaceSelector: {}
 
+    # Scrape metric/label names using the legacy (classic Prometheus) naming
+    # scheme instead of Prometheus 3.x's new UTF-8 default. With the UTF-8
+    # default, Prometheus negotiates UTF-8 exposition with targets and stores
+    # OTel-native dotted names verbatim (e.g. Alloy's otelcol gRPC self-metric
+    # `rpc.client.call.duration_seconds_bucket`, exported by the otelgrpc
+    # instrumentation). Mimir enforces classic metric names and rejects those on
+    # remote_write ("received a series with invalid metric name ...
+    # err-mimir-metric-name-invalid"), dropping whole scrape batches. Legacy
+    # makes Prometheus request underscore-escaped names from every target, so the
+    # same metric arrives as `rpc_client_call_duration_seconds_bucket` and Mimir
+    # accepts it. Every other target already exposes classic names, so this is a
+    # no-op for them.
+    nameValidationScheme: Legacy
+
     # Mimir is the long-term metrics store; Prometheus keeps only a short local
     # buffer and forwards everything downstream.
     retention: 2h
