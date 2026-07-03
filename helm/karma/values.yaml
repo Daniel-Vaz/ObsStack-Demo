@@ -1,0 +1,48 @@
+# Karma — alert dashboard for Prometheus Alertmanager
+# (https://github.com/prymitive/karma)
+#
+# Karma is a read-only UI: it polls Alertmanager's HTTP API and renders every
+# alert it finds — active, suppressed (inhibited) and silenced. It is NOT an
+# Alertmanager receiver; Alertmanager never pushes to it. Pointing Karma at the
+# in-cluster Alertmanager (below) is therefore what makes "all alerts" appear
+# here, and the catch-all route in helm/kube-prometheus-stack/values.yaml is
+# what guarantees every alert flows through Alertmanager by default in the
+# first place.
+#
+# This is a small first-party chart (no upstream Helm chart is published for
+# Karma), deployed by `make karma` — part of `make up`.
+
+image:
+  repository: ghcr.io/prymitive/karma
+  tag: v0.131
+  pullPolicy: IfNotPresent
+
+replicas: 1
+
+# Exposed to the host as a NodePort. The kind node maps hostPort 8081 ->
+# containerPort 30081 (see kind/cluster.yaml extraPortMappings), so the UI is
+# reachable at http://localhost:8081 with no port-forward.
+service:
+  type: NodePort
+  port: 8080
+  nodePort: 30081
+
+resources:
+  requests:
+    cpu: 25m
+    memory: 64Mi
+
+# Rendered verbatim into Karma's config file under its top-level `alertmanager:`
+# key (see templates/configmap.yaml). Add more entries under `servers` to have
+# Karma aggregate alerts across several Alertmanagers.
+alertmanager:
+  # How often Karma re-polls Alertmanager for the current alert set.
+  interval: 60s
+  servers:
+    - name: alertmanager
+      uri: http://kube-prometheus-stack-alertmanager.observability.svc.cluster.local:9093
+      timeout: 20s
+      # Proxy Alertmanager API calls through the Karma backend. Required here
+      # because the browser can't resolve the in-cluster Service DNS name above
+      # — Karma's pod reaches Alertmanager on the browser's behalf.
+      proxy: true

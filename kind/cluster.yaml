@@ -22,3 +22,5 @@ nodes:
         hostPort: 8080
       - containerPort: 30466   # Headlamp UI      -> http://localhost:4466
         hostPort: 4466
+      - containerPort: 30081   # Karma alert UI   -> http://localhost:8081
+        hostPort: 8081

@@ -108,7 +108,7 @@ namespace: ## Ensure the target namespace exists
 	@kubectl get namespace $(NAMESPACE) >/dev/null 2>&1 || kubectl create namespace $(NAMESPACE)
 
 # ---- Individual component deploys --------------------------------------------
-.PHONY: kube-prometheus-stack mimir loki tempo pyroscope grafana alloy headlamp
+.PHONY: kube-prometheus-stack mimir loki tempo pyroscope grafana alloy headlamp karma
 
 kube-prometheus-stack: repos namespace ## Deploy kube-prometheus-stack (Prometheus, Alertmanager, operator, KSM, node-exporter)
 	$(call helm_install,kube-prometheus-stack,prometheus-community/kube-prometheus-stack,$(KPS_VERSION))
@@ -134,17 +134,35 @@ alloy: repos namespace ## Deploy Alloy (telemetry collector)
 headlamp: repos namespace ## Deploy Headlamp (cluster web UI)
 	$(call helm_install,headlamp,headlamp/headlamp,$(HEADLAMP_VERSION))
 
+karma: namespace ## Deploy Karma (Alertmanager alert dashboard) from its local chart
+	@# First-party local chart (helm/karma) — no external repo, so it skips
+	@# `repos` and passes a chart path instead of a repo/chart ref. Same retry
+	@# loop as helm_install, minus the --version flag (invalid for local paths).
+	@for attempt in 1 2 3; do \
+		echo ">> karma: helm upgrade --install (attempt $$attempt)"; \
+		helm upgrade --install karma $(HELM_DIR)/karma \
+			--namespace $(NAMESPACE) --create-namespace \
+			--values $(HELM_DIR)/karma/values.yaml \
+			--wait --timeout $(HELM_TIMEOUT) && break; \
+		if [ $$attempt -eq 3 ]; then \
+			echo ">> karma: still not ready after $$attempt attempts" >&2; exit 1; \
+		fi; \
+		echo ">> karma: transient failure, retrying in 15s..."; \
+		sleep 15; \
+	done
+
 # ---- Grouped deploys ---------------------------------------------------------
 .PHONY: backends stack
 backends: mimir loki tempo pyroscope ## Deploy the four LGTM backends
 # kube-prometheus-stack goes first: it installs the Prometheus-operator CRDs
-# (ServiceMonitor, ...) that every other chart's values now reference.
-stack: kube-prometheus-stack backends grafana headlamp ## Deploy Prometheus stack + backends + Grafana + Headlamp
+# (ServiceMonitor, ...) that every other chart's values now reference, plus the
+# Alertmanager that Karma reads from.
+stack: kube-prometheus-stack backends grafana headlamp karma ## Deploy Prometheus stack + backends + Grafana + Headlamp + Karma
 
 .PHONY: up
 up: cluster stack alloy validate demo ## Full setup: cluster + stack + Alloy + validate + demo app
 	@echo
-	@echo "Done. Grafana http://localhost:3000 (admin/admin) · Alloy http://localhost:12345 · Prometheus http://localhost:9090 · Alertmanager http://localhost:9093 · Headlamp http://localhost:4466 · Demo UI http://localhost:8080."
+	@echo "Done. Grafana http://localhost:3000 (admin/admin) · Alloy http://localhost:12345 · Prometheus http://localhost:9090 · Alertmanager http://localhost:9093 · Karma http://localhost:8081 · Headlamp http://localhost:4466 · Demo UI http://localhost:8080."
 
 # ---- Validation & tests ------------------------------------------------------
 .PHONY: status
@@ -177,6 +195,10 @@ alertmanager-ui: ## Show the Alertmanager UI URL
 headlamp-ui: ## Show the Headlamp UI URL
 	@echo "Headlamp at http://localhost:4466 (opens straight in — no token required)."
 
+.PHONY: karma-ui
+karma-ui: ## Show the Karma alert dashboard URL
+	@echo "Karma at http://localhost:8081 (alert dashboard for Alertmanager)."
+
 .PHONY: demo-ui
 demo-ui: ## Show the demo app's web UI URL (or port-forward on older clusters)
 	@echo "otel-demo web UI at http://localhost:8080."
@@ -191,7 +213,7 @@ logs-alloy: ## Tail Alloy logs
 # ---- Teardown ----------------------------------------------------------------
 .PHONY: clean
 clean: ## Uninstall all helm releases (keep the cluster)
-	-@for r in headlamp alloy grafana pyroscope tempo loki mimir kube-prometheus-stack; do \
+	-@for r in karma headlamp alloy grafana pyroscope tempo loki mimir kube-prometheus-stack; do \
 		helm uninstall $$r -n $(NAMESPACE) 2>/dev/null || true; \
 	done
 	@echo "Releases removed. (Prometheus-operator CRDs are left in place; kind delete removes them.)"

@@ -1,0 +1,11 @@
+apiVersion: v2
+name: karma
+description: Karma — alert dashboard for Prometheus Alertmanager
+type: application
+# Chart version is local to this repo; appVersion tracks the upstream Karma
+# release we pin in values.yaml.
+version: 0.1.0
+appVersion: v0.131
+home: https://github.com/prymitive/karma
+sources:
+  - https://github.com/prymitive/karma

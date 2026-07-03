@@ -3,7 +3,7 @@
 *.swp
 .idea/
 .vscode/
-.calude/
+.claude/
 
 # Helm/kube scratch
 *.tgz

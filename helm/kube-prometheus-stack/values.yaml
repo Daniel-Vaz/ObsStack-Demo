@@ -62,6 +62,33 @@ alertmanager:
   service:
     type: NodePort
     nodePort: 30093
+  # Route *every* alert through a single catch-all receiver by default. The
+  # chart's stock config sends everything to a "null" receiver and carves out a
+  # separate Watchdog route; here we collapse that into one catch-all so no
+  # alert is ever dropped or filtered out before it reaches Alertmanager's
+  # alert store. That matters because Karma (the alert dashboard, deployed by
+  # `make karma`) reads the full alert set straight from Alertmanager's API —
+  # so this default route is what guarantees all firing alerts, of every
+  # severity and from every namespace, are visible in Karma.
+  config:
+    route:
+      group_by: ['alertname', 'namespace']
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 12h
+      receiver: catch-all
+      # Explicitly empty. Helm deep-merges this `config` onto the chart's
+      # defaults, and the stock config ships a sub-route sending Watchdog to a
+      # "null" receiver — which our `receivers` below no longer defines. Left
+      # unset, that stale sub-route survives the merge and Alertmanager rejects
+      # the config ("undefined receiver null"). Clearing it sends *everything*,
+      # Watchdog included, to catch-all.
+      routes: []
+    receivers:
+      # A receiver with no notifier config: Alertmanager still accepts, groups
+      # and stores every alert (so Karma sees them) without forwarding them to
+      # an external destination — there's nowhere to page in a local demo.
+      - name: catch-all
   alertmanagerSpec:
     # Ephemeral for the demo (no PVC).
     storage: {}
