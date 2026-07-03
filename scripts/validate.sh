@@ -7,6 +7,11 @@ set -uo pipefail
 cd "$(dirname "$0")/.."
 source scripts/lib.sh
 
+# alloy (default) or prometheus (legacy toggle) — see the Makefile. Only
+# Karma and Prometheus itself differ between the two: Karma isn't deployed,
+# and Prometheus's own server doesn't run, under METRICS_MODE=alloy.
+METRICS_MODE="${METRICS_MODE:-alloy}"
+
 info "Waiting for all pods in '$NAMESPACE' to become Ready (timeout 5m)..."
 # Exclude Succeeded pods (e.g. the mimir make-minio-buckets Job) — a completed
 # pod never reports Ready, which would otherwise hang the wait until timeout.
@@ -20,7 +25,9 @@ else
 fi
 
 info "Checking helm releases are deployed..."
-for r in kube-prometheus-stack mimir loki tempo pyroscope grafana alloy headlamp karma; do
+releases=(kube-prometheus-stack mimir loki tempo pyroscope grafana alloy headlamp)
+[[ "$METRICS_MODE" == "prometheus" ]] && releases+=(karma)
+for r in "${releases[@]}"; do
   status="$(helm status "$r" -n "$NAMESPACE" -o json 2>/dev/null | grep -o '"status":"[^"]*"' | head -1)"
   if [[ "$status" == *deployed* ]]; then pass "release $r deployed"; else warn "release $r not deployed ($status)"; fi
 done
@@ -80,7 +87,11 @@ if ! with_port_forward svc/grafana 80 -- grafana_datasource_health; then
 fi
 
 info "Checking the NodePort-exposed UIs are reachable on the host..."
-for entry in "grafana:3000" "alloy:12345" "prometheus:9090" "alertmanager:9093" "karma:8081" "headlamp:4466"; do
+uis=("grafana:3000" "alloy:12345" "alertmanager:9093" "headlamp:4466")
+if [[ "$METRICS_MODE" == "prometheus" ]]; then
+  uis+=("prometheus:9090" "karma:8081")
+fi
+for entry in "${uis[@]}"; do
   svc="${entry%%:*}"; port="${entry##*:}"
   if curl -s -o /dev/null --max-time 5 "http://localhost:${port}"; then
     pass "$svc UI reachable at http://localhost:${port}"

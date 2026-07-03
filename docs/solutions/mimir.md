@@ -33,15 +33,24 @@ know.
 
 ## How we use it in this demo
 
-Mimir is the **long-term store for all metrics.** [Prometheus (KPS)](./kube-prometheus-stack.md)
-does the scraping and remote-writes everything to Mimir; Grafana's default
-metrics datasource points at Mimir.
+Mimir is the **long-term store for all metrics.** By default (`METRICS_MODE=alloy`),
+[Alloy](./alloy.md) does the scraping and remote-writes everything to Mimir; set
+`METRICS_MODE=prometheus` to have [kube-prometheus-stack's Prometheus](./kube-prometheus-stack.md)
+do that instead. Grafana's default metrics datasource points at Mimir either way.
+
+Mimir's **ruler** is also enabled by default: Alloy syncs `PrometheusRule` objects
+into it, the ruler evaluates them, and fires alerts to the kube-prometheus-stack
+Alertmanager (`structuredConfig.ruler.alertmanager_url` is pointed there explicitly,
+since Mimir's own bundled Alertmanager component stays disabled — there's only one
+Alertmanager in this demo). The `METRICS_MODE=prometheus` toggle disables the ruler
+again, since Prometheus evaluates rules itself in that mode. See
+[architecture.md](../architecture.md#metrics-collection--alerting-two-modes).
 
 There's no official "single binary" Mimir chart, so we run the microservices
 chart at its **minimum viable scale** — one replica per component, no zone
 awareness, no Kafka, caches off, with bundled **MinIO** as the object store.
-That's still ~9 pods (vs. the ~17 the defaults render). The full reasoning is in
-[architecture.md](../architecture.md#mimir-the-exception).
+That's still ~9-10 pods (vs. the ~17 the defaults render). The full reasoning
+is in [architecture.md](../architecture.md#mimir-the-exception).
 
 ## Try it
 

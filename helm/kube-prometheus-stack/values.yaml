@@ -1,11 +1,17 @@
-# kube-prometheus-stack — Prometheus, Alertmanager, the Prometheus Operator,
-# kube-state-metrics and node-exporter.
+# kube-prometheus-stack — Alertmanager, the Prometheus Operator,
+# kube-state-metrics and node-exporter. (+ Prometheus itself, in the
+# METRICS_MODE=prometheus toggle — see values-prometheus-metrics.yaml.)
 #
-# Prometheus is now the sole metrics scraper for the whole demo. Every other
-# component (Mimir/Loki/Tempo/Pyroscope/Grafana/Alloy) ships a ServiceMonitor
-# from its own chart (see each helm/*/values.yaml); the operator turns those
-# into scrape targets. Prometheus then remote-writes every sample to Mimir,
-# which Grafana reads from. Alloy no longer touches metrics.
+# Default (METRICS_MODE=alloy): Prometheus itself is NOT deployed. The
+# Operator stays only to own the CRDs (ServiceMonitor/PodMonitor/PrometheusRule)
+# that every other chart's values reference — Alloy (helm/alloy/values.yaml)
+# reads those CRDs directly with its own Kubernetes client, scrapes, and
+# remote-writes to Mimir, and syncs PrometheusRules into Mimir's ruler, which
+# evaluates them and fires to the Alertmanager deployed here.
+#
+# Toggle METRICS_MODE=prometheus restores the original as-is architecture:
+# Prometheus itself scrapes and evaluates rules — see
+# values-prometheus-metrics.yaml.
 #
 # Grafana and the Windows exporter are intentionally NOT deployed here: Grafana
 # comes from its own grafana-community chart, and there are no Windows nodes.
@@ -66,10 +72,11 @@ alertmanager:
   # chart's stock config sends everything to a "null" receiver and carves out a
   # separate Watchdog route; here we collapse that into one catch-all so no
   # alert is ever dropped or filtered out before it reaches Alertmanager's
-  # alert store. That matters because Karma (the alert dashboard, deployed by
-  # `make karma`) reads the full alert set straight from Alertmanager's API —
-  # so this default route is what guarantees all firing alerts, of every
-  # severity and from every namespace, are visible in Karma.
+  # alert store. That matters because whatever reads Alertmanager's alert set
+  # — Grafana Alerting via the Mimir datasource by default, or Karma
+  # (`make karma`) in the METRICS_MODE=prometheus toggle — polls straight from
+  # Alertmanager's API, so this default route is what guarantees all firing
+  # alerts, of every severity and from every namespace, are visible there.
   config:
     route:
       group_by: ['alertname', 'namespace']
@@ -95,51 +102,8 @@ alertmanager:
     resources:
       requests: { cpu: 25m, memory: 64Mi }
 
-# ---- Prometheus ----
+# ---- Prometheus: disabled by default (Alloy scrapes instead — see
+# helm/alloy/values.yaml). Enabled only via the values-prometheus-metrics.yaml
+# overlay (METRICS_MODE=prometheus). ----
 prometheus:
-  enabled: true
-  # Expose the Prometheus UI to the host as a NodePort (kind maps hostPort 9090
-  # -> containerPort 30090; see kind/cluster.yaml), reachable at
-  # http://localhost:9090.
-  service:
-    type: NodePort
-    nodePort: 30090
-  prometheusSpec:
-    # By default the operator only selects ServiceMonitors/PodMonitors carrying
-    # this release's label. Our backends' ServiceMonitors live in the
-    # observability namespace without that label, so widen every selector to
-    # match all resources in all namespaces.
-    serviceMonitorSelectorNilUsesHelmValues: false
-    podMonitorSelectorNilUsesHelmValues: false
-    probeSelectorNilUsesHelmValues: false
-    ruleSelectorNilUsesHelmValues: false
-    serviceMonitorSelector: {}
-    serviceMonitorNamespaceSelector: {}
-    podMonitorSelector: {}
-    podMonitorNamespaceSelector: {}
-
-    # Scrape metric/label names using the legacy (classic Prometheus) naming
-    # scheme instead of Prometheus 3.x's new UTF-8 default. With the UTF-8
-    # default, Prometheus negotiates UTF-8 exposition with targets and stores
-    # OTel-native dotted names verbatim (e.g. Alloy's otelcol gRPC self-metric
-    # `rpc.client.call.duration_seconds_bucket`, exported by the otelgrpc
-    # instrumentation). Mimir enforces classic metric names and rejects those on
-    # remote_write ("received a series with invalid metric name ...
-    # err-mimir-metric-name-invalid"), dropping whole scrape batches. Legacy
-    # makes Prometheus request underscore-escaped names from every target, so the
-    # same metric arrives as `rpc_client_call_duration_seconds_bucket` and Mimir
-    # accepts it. Every other target already exposes classic names, so this is a
-    # no-op for them.
-    nameValidationScheme: Legacy
-
-    # Mimir is the long-term metrics store; Prometheus keeps only a short local
-    # buffer and forwards everything downstream.
-    retention: 2h
-
-    # Remote-write every scraped sample to Mimir. Grafana's metrics datasource
-    # points at Mimir, so this is what makes scraped metrics queryable.
-    remoteWrite:
-      - url: http://mimir-gateway.observability.svc.cluster.local/api/v1/push
-
-    resources:
-      requests: { cpu: 200m, memory: 512Mi }
+  enabled: false

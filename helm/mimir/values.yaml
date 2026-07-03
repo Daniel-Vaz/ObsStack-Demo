@@ -4,11 +4,20 @@
 # first-party chart is grafana/mimir-distributed (microservices). We therefore
 # run it at the smallest supported scale: single replica per required
 # component, zone-aware replication disabled, ingest-storage (Kafka) disabled,
-# and all optional components (alertmanager, ruler, caches, overrides-exporter,
+# and most optional components (alertmanager, caches, overrides-exporter,
 # query-scheduler) turned off. Object storage is provided by a bundled MinIO.
 #
-# Write path (Prometheus remote_write): http://mimir-gateway/api/v1/push
+# Write path (remote_write, from Alloy or Prometheus depending on
+#             METRICS_MODE): http://mimir-gateway/api/v1/push
 # Read  path (Grafana datasource):       http://mimir-gateway/prometheus
+#
+# The ruler IS enabled by default (METRICS_MODE=alloy): Alloy syncs
+# PrometheusRules into it (see helm/alloy/values.yaml mimir.rules.kubernetes),
+# and it evaluates them and fires to the kube-prometheus-stack Alertmanager —
+# Mimir's own bundled Alertmanager component stays disabled in both modes; the
+# one Alertmanager throughout is the one kube-prometheus-stack deploys. The
+# METRICS_MODE=prometheus toggle disables the ruler again (see
+# values-prometheus-metrics.yaml) since Prometheus itself evaluates rules there.
 
 # Don't deploy the bundled Kafka statefulset...
 kafka:
@@ -39,6 +48,12 @@ mimir:
       max_global_series_per_user: 0
       ingestion_rate: 100000
       ingestion_burst_size: 200000
+    # The chart's default alertmanager_url points at Mimir's own bundled
+    # Alertmanager component, which is disabled below (alertmanager.enabled:
+    # false) — there's only ever one Alertmanager in this demo, the one
+    # kube-prometheus-stack deploys. Point the ruler at it directly instead.
+    ruler:
+      alertmanager_url: http://kube-prometheus-stack-alertmanager.observability.svc.cluster.local:9093
 
 # ---- Required components: one replica each, zones disabled ----
 distributor:
@@ -95,10 +110,18 @@ gateway:
   resources:
     requests: { cpu: 50m, memory: 64Mi }
 
+# ---- Ruler: evaluates PrometheusRules synced by Alloy, fires to the
+# kube-prometheus-stack Alertmanager (alertmanager_url above). Disabled by the
+# values-prometheus-metrics.yaml overlay (METRICS_MODE=prometheus), where
+# Prometheus itself evaluates rules instead. ----
+ruler:
+  enabled: true
+  replicas: 1
+  resources:
+    requests: { cpu: 50m, memory: 64Mi }
+
 # ---- Disabled: optional / not needed for a demo ----
 alertmanager:
-  enabled: false
-ruler:
   enabled: false
 overrides_exporter:
   replicas: 0
@@ -124,9 +147,11 @@ minio:
   resources:
     requests: { cpu: 100m, memory: 128Mi }
 
-# Emit ServiceMonitors so kube-prometheus-stack's Prometheus scrapes every Mimir
-# component. The chart only targets components that actually serve /metrics (the
-# nginx gateway is excluded), so there are no perpetually-down targets.
+# Emit ServiceMonitors so the metrics collector (Alloy by default, or
+# kube-prometheus-stack's Prometheus in the METRICS_MODE=prometheus toggle)
+# scrapes every Mimir component. The chart only targets components that
+# actually serve /metrics (the nginx gateway is excluded), so there are no
+# perpetually-down targets.
 metaMonitoring:
   serviceMonitor:
     enabled: true

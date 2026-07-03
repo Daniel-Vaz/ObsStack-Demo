@@ -1,0 +1,54 @@
+# Overlay applied on top of values.yaml only when METRICS_MODE=prometheus
+# (see the Makefile). Restores the original "as-is" architecture: KPS's own
+# Prometheus does the scraping, evaluates PrometheusRules itself, and fires to
+# Alertmanager. In the default METRICS_MODE=alloy, Prometheus itself is
+# disabled (see values.yaml) and Alloy does this work instead.
+
+# ---- Prometheus ----
+prometheus:
+  enabled: true
+  # Expose the Prometheus UI to the host as a NodePort (kind maps hostPort 9090
+  # -> containerPort 30090; see kind/cluster.yaml), reachable at
+  # http://localhost:9090.
+  service:
+    type: NodePort
+    nodePort: 30090
+  prometheusSpec:
+    # By default the operator only selects ServiceMonitors/PodMonitors carrying
+    # this release's label. Our backends' ServiceMonitors live in the
+    # observability namespace without that label, so widen every selector to
+    # match all resources in all namespaces.
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+    probeSelectorNilUsesHelmValues: false
+    ruleSelectorNilUsesHelmValues: false
+    serviceMonitorSelector: {}
+    serviceMonitorNamespaceSelector: {}
+    podMonitorSelector: {}
+    podMonitorNamespaceSelector: {}
+
+    # Scrape metric/label names using the legacy (classic Prometheus) naming
+    # scheme instead of Prometheus 3.x's new UTF-8 default. With the UTF-8
+    # default, Prometheus negotiates UTF-8 exposition with targets and stores
+    # OTel-native dotted names verbatim (e.g. Alloy's otelcol gRPC self-metric
+    # `rpc.client.call.duration_seconds_bucket`, exported by the otelgrpc
+    # instrumentation). Mimir enforces classic metric names and rejects those on
+    # remote_write ("received a series with invalid metric name ...
+    # err-mimir-metric-name-invalid"), dropping whole scrape batches. Legacy
+    # makes Prometheus request underscore-escaped names from every target, so the
+    # same metric arrives as `rpc_client_call_duration_seconds_bucket` and Mimir
+    # accepts it. Every other target already exposes classic names, so this is a
+    # no-op for them.
+    nameValidationScheme: Legacy
+
+    # Mimir is the long-term metrics store; Prometheus keeps only a short local
+    # buffer and forwards everything downstream.
+    retention: 2h
+
+    # Remote-write every scraped sample to Mimir. Grafana's metrics datasource
+    # points at Mimir, so this is what makes scraped metrics queryable.
+    remoteWrite:
+      - url: http://mimir-gateway.observability.svc.cluster.local/api/v1/push
+
+    resources:
+      requests: { cpu: 200m, memory: 512Mi }

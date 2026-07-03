@@ -7,6 +7,14 @@
 > config: [`helm/karma/values.yaml`](../../helm/karma/values.yaml) ·
 > UI: `http://localhost:8081`
 
+> [!NOTE]
+> Karma is only deployed in the legacy `METRICS_MODE=prometheus` toggle
+> (`make up METRICS_MODE=prometheus`). In the default `METRICS_MODE=alloy`
+> architecture it's skipped: Grafana Alerting (via the Mimir datasource, whose
+> `manageAlerts` is on) plus the Alertmanager datasource already cover "what's
+> firing right now," so a separate read-only Alertmanager dashboard is
+> redundant. See [architecture.md](../architecture.md#metrics-collection--alerting-two-modes).
+
 ## What it is
 
 [**Karma**](https://github.com/prymitive/karma) is a lightweight,
@@ -40,8 +48,9 @@ already silenced?"**
 
 ## How we use it in this demo
 
-Karma is deployed by default with `make up` (target: `make karma`) into the
-`observability` namespace, exposed on `http://localhost:8081`.
+Karma is deployed with `make up METRICS_MODE=prometheus` (target: `make karma`,
+part of `stack`'s prerequisites only in that mode) into the `observability`
+namespace, exposed on `http://localhost:8081`.
 
 - **Points at the in-cluster Alertmanager.**
   [`helm/karma/values.yaml`](../../helm/karma/values.yaml) configures one

@@ -35,20 +35,33 @@ like Unix pipes for telemetry.
 
 ## How we use it in this demo
 
-Alloy owns **three of the four signals: logs, traces, and profiles.** (Metrics
-are handled by [Prometheus/KPS](./kube-prometheus-stack.md) instead.) It runs as
-a **DaemonSet** — one pod per node — so it's always local to the workloads it
-collects from.
+By default (`METRICS_MODE=alloy`), Alloy owns **all four signals**, including
+metrics — logs, traces, profiles, *and* metrics + alerting rules. (Set
+`METRICS_MODE=prometheus` to hand metrics back to
+[kube-prometheus-stack's Prometheus](./kube-prometheus-stack.md) instead, the
+original setup — see [architecture.md](../architecture.md#metrics-collection--alerting-two-modes).)
+It runs as a **DaemonSet** — one pod per node — so it's always local to the
+workloads it collects from.
 
 | Signal | Alloy pipeline | Sends to |
 |--------|----------------|----------|
+| Metrics | `prometheus.operator.servicemonitors`/`podmonitors` → `prometheus.remote_write` | [Mimir](./mimir.md) |
+| Rules | `mimir.rules.kubernetes` (syncs `PrometheusRule` CRDs) | Mimir's ruler |
 | Logs | `discovery.kubernetes` → `loki.source.kubernetes` → `loki.write` | [Loki](./loki.md) |
 | Traces | `otelcol.receiver.otlp` → `otelcol.processor.batch` → `otelcol.exporter.otlp` | [Tempo](./tempo.md) |
 | Profiles | `discovery.kubernetes` → `pyroscope.scrape` → `pyroscope.write` | [Pyroscope](./pyroscope.md) |
 
+The `prometheus.operator.*` and `mimir.rules.kubernetes` components read the
+Prometheus-Operator CRDs (`ServiceMonitor`/`PodMonitor`/`PrometheusRule`)
+straight from the Kubernetes API with Alloy's own client — they don't need the
+Operator's own reconcile loop, only the CRDs it installs (see
+[kube-prometheus-stack](./kube-prometheus-stack.md)). No extra RBAC is needed:
+the chart's default ClusterRole already grants the necessary
+`get`/`list`/`watch` permissions.
+
 The demo app pushes **traces** to Alloy over OTLP/gRPC, while Alloy **scrapes**
-pod logs and `pprof` endpoints on its own. Full config detail is in
-[architecture.md](../architecture.md#data-flow).
+pod logs, `pprof` endpoints, and (by default) metrics on its own. Full config
+detail is in [architecture.md](../architecture.md#data-flow).
 
 ## Try it
 

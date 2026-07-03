@@ -40,8 +40,21 @@ adding a new scrape target is declarative.
 
 ## How we use it in this demo
 
-KPS owns **one signal: metrics.** (Logs, traces, and profiles go through
-[Alloy](./alloy.md) instead.)
+This demo has **two metrics-collection modes**, toggled with `METRICS_MODE`
+(`make up METRICS_MODE=prometheus` for the legacy setup; `alloy` is the
+default). KPS's role differs between them:
+
+- **Default (`METRICS_MODE=alloy`)**: KPS deploys the Prometheus Operator,
+  kube-state-metrics, node-exporter, and Alertmanager — **not Prometheus
+  itself**. The Operator's only job here is to own the CRDs
+  (`ServiceMonitor`/`PodMonitor`/`PrometheusRule`); [Alloy](./alloy.md) reads
+  them directly and does the scraping and rule-syncing instead. Alertmanager
+  stays, since it's still where alerts land (fired by
+  [Mimir](./mimir.md)'s ruler in this mode).
+- **Toggle (`METRICS_MODE=prometheus`)**: KPS additionally deploys Prometheus
+  itself, restoring the original setup described below.
+
+### The `METRICS_MODE=prometheus` setup
 
 - Prometheus discovers every component via the **ServiceMonitors** each chart
   emits, plus the demo app's `PodMonitor`.
@@ -51,17 +64,18 @@ KPS owns **one signal: metrics.** (Logs, traces, and profiles go through
 - The bundled Grafana is **disabled** (we run Grafana as its own release), and a
   few kind-specific scrape targets are turned off to avoid noise.
 
-See [architecture.md](../architecture.md#metrics-collection-kube-prometheus-stack)
-for the exact values and rationale.
+See [architecture.md](../architecture.md#metrics-collection--alerting-two-modes)
+for the exact values and rationale behind both modes.
 
 ## Try it
 
-- Open Prometheus at `http://localhost:9090` → **Status → Targets** to watch it
-  discover and scrape every component.
-- Run a PromQL query like `up` (1 = target healthy) or
+- With `METRICS_MODE=prometheus`: open Prometheus at `http://localhost:9090` →
+  **Status → Targets** to watch it discover and scrape every component, and run
+  a PromQL query like `up` (1 = target healthy) or
   `rate(http_server_request_duration_seconds_count[1m])`.
-- Open Alertmanager at `http://localhost:9093` to see the alert-routing UI.
-- In Grafana, **Explore → Mimir** queries the *same* metrics after remote-write.
+- In either mode: open Alertmanager at `http://localhost:9093` to see the
+  alert-routing UI, and in Grafana, **Explore → Mimir** queries the metrics
+  after remote-write (from Alloy by default, or from Prometheus in the toggle).
 
 ![Prometheus query UI at localhost:9090 graphing an apiserver burn-rate PromQL expression](../images/prometheus-ui.png)
 *Prometheus's own UI at `http://localhost:9090` — the short 2-hour local buffer, queryable with PromQL before samples are remote-written to Mimir.*

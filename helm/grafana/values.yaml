@@ -33,10 +33,14 @@ datasources:
         jsonData:
           prometheusType: Mimir
           timeInterval: 15s
-          # Mimir's ruler is disabled (see helm/mimir/values.yaml), so don't let
-          # Grafana Alerting probe/manage rules against it — otherwise the
-          # ruler probe hits the gateway with no ruler backend and 502s.
-          manageAlerts: false
+          # Mimir's ruler is enabled by default (METRICS_MODE=alloy; see
+          # helm/mimir/values.yaml) — Alloy syncs PrometheusRules into it and it
+          # evaluates them against the kube-prometheus-stack Alertmanager, so
+          # let Grafana Alerting manage/show those rules too. The
+          # values-prometheus-metrics.yaml overlay flips this back to false for
+          # the METRICS_MODE=prometheus toggle, where the ruler is disabled and
+          # this probe would otherwise 502.
+          manageAlerts: true
 
       - name: Loki
         type: loki
@@ -103,7 +107,8 @@ sidecar:
     labelValue: "1"
     searchNamespace: ALL
 
-# Emit a ServiceMonitor so kube-prometheus-stack's Prometheus scrapes Grafana
-# (Grafana serves /metrics on its HTTP port 3000).
+# Emit a ServiceMonitor so the metrics collector (Alloy by default, or
+# kube-prometheus-stack's Prometheus in the METRICS_MODE=prometheus toggle)
+# scrapes Grafana (Grafana serves /metrics on its HTTP port 3000).
 serviceMonitor:
   enabled: true

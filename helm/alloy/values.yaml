@@ -1,12 +1,24 @@
-# Grafana Alloy — the collector for logs, traces and profiles.
+# Grafana Alloy — the collector for all four signals by default
+# (METRICS_MODE=alloy; see the Makefile).
 #
-# Runs as a DaemonSet. Metrics are no longer Alloy's concern: kube-prometheus-
-# stack's Prometheus scrapes every component (via ServiceMonitors) and
-# remote-writes to Mimir. Alloy handles the other three signals.
+# Runs as a DaemonSet.
 #
+#   Metrics : ServiceMonitors/PodMonitors (Operator CRDs), scraped directly -> Mimir
+#             PrometheusRules (Operator CRDs), synced                       -> Mimir's ruler
 #   Logs    : all pod stdout/stderr (via the Kubernetes API)  -> Loki
 #   Traces  : OTLP in on :4317 (gRPC) / :4318 (HTTP)          -> Tempo
 #   Profiles: pods annotated  pyroscope.io/scrape: "true"     -> Pyroscope
+#
+# Alloy needs no extra RBAC for this: the chart's default ClusterRole already
+# grants get/list/watch on servicemonitors/podmonitors/prometheusrules
+# (monitoring.coreos.com). Those CRDs are installed by kube-prometheus-stack's
+# Operator (still deployed for that reason — see
+# helm/kube-prometheus-stack/values.yaml); Alloy reads them directly with its
+# own Kubernetes client, without needing the Operator's reconcile loop.
+#
+# Toggle METRICS_MODE=prometheus hands metrics back to kube-prometheus-stack's
+# own Prometheus — see values-prometheus-metrics.yaml, which replaces the
+# config below with a metrics-free version of the same pipeline.
 
 controller:
   type: daemonset
@@ -50,6 +62,35 @@ alloy:
       // ========================================================================
       discovery.kubernetes "pods" {
         role = "pod"
+      }
+
+      // ========================================================================
+      // METRICS  ->  Mimir
+      // Discovers ServiceMonitor/PodMonitor objects straight from the
+      // Prometheus-Operator CRDs (installed by kube-prometheus-stack) and
+      // scrapes their targets directly -- these components both discover and
+      // scrape, unlike discovery.kubernetes above. Omitting namespaces/selector
+      // on each means "every namespace, every ServiceMonitor/PodMonitor".
+      // ========================================================================
+      prometheus.remote_write "mimir" {
+        endpoint {
+          url = "http://mimir-gateway.observability.svc.cluster.local/api/v1/push"
+        }
+      }
+
+      prometheus.operator.servicemonitors "services" {
+        forward_to = [prometheus.remote_write.mimir.receiver]
+      }
+
+      prometheus.operator.podmonitors "pods" {
+        forward_to = [prometheus.remote_write.mimir.receiver]
+      }
+
+      // Syncs PrometheusRule objects (every namespace) into Mimir's ruler,
+      // which evaluates them and fires to the kube-prometheus-stack
+      // Alertmanager (see helm/mimir/values.yaml ruler.alertmanager_url).
+      mimir.rules.kubernetes "default" {
+        address = "http://mimir-gateway.observability.svc.cluster.local"
       }
 
       // ========================================================================

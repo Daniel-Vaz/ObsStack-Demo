@@ -1,51 +1,66 @@
 # Observability Demo
 
 A minimal, reproducible demo of the full Grafana observability stack running on a
-local [kind](https://kind.sigs.k8s.io/) cluster. Telemetry is split between two
-collectors:
+local [kind](https://kind.sigs.k8s.io/) cluster. Metrics collection has **two
+toggleable modes** (`METRICS_MODE`, default `alloy`):
 
-- **kube-prometheus-stack** (Prometheus + operator + kube-state-metrics +
-  node-exporter) scrapes **metrics** from every component via ServiceMonitors and
-  remote-writes them to **Mimir**.
-- **Grafana Alloy** collects the other three signals — **logs**, **traces**, and
-  **profiles** — and ships them to Loki / Tempo / Pyroscope.
+- **`alloy` (default)**: **Grafana Alloy** collects *all four signals* — it reads
+  the Prometheus-Operator CRDs directly, scrapes **metrics** and remote-writes
+  them to **Mimir**, and syncs alerting rules into Mimir's **ruler**, which
+  evaluates them against Alertmanager. **kube-prometheus-stack** deploys only
+  the Operator, kube-state-metrics, node-exporter, and Alertmanager (no
+  Prometheus server), and **Karma is not deployed** — Grafana Alerting (via the
+  Mimir datasource) covers that role instead.
+- **`prometheus`** (`make up METRICS_MODE=prometheus`): the original setup —
+  **kube-prometheus-stack**'s own Prometheus scrapes metrics via ServiceMonitors,
+  evaluates alerting rules itself, and remote-writes to Mimir; **Karma** is
+  deployed as Alertmanager's dashboard.
 
-Everything is read back through **Grafana** (**L**oki / **G**rafana / **T**empo /
-**M**imir, plus Pyroscope). **Headlamp** provides a web UI for browsing the
-cluster itself, and **Karma** provides an alert dashboard over Alertmanager. The
-web UIs are exposed as NodePort services and published on the
-host via kind `extraPortMappings`, so they're reachable directly on `localhost`
-(e.g. Grafana at `http://localhost:3000`, Headlamp at `http://localhost:4466`).
+In both modes, Alloy also collects **logs** and **traces** (always) and
+**profiles** (always), shipping them to Loki / Tempo / Pyroscope. Everything is
+read back through **Grafana** (**L**oki / **G**rafana / **T**empo / **M**imir,
+plus Pyroscope). **Headlamp** provides a web UI for browsing the cluster itself.
+The web UIs are exposed as NodePort services and published on the host via kind
+`extraPortMappings`, so they're reachable directly on `localhost` (e.g. Grafana
+at `http://localhost:3000`, Headlamp at `http://localhost:4466`).
+
+See [architecture.md](docs/architecture.md#metrics-collection--alerting-two-modes)
+for the full rationale behind both modes.
 
 >[!NOTE]
 >![Grafana Kubernetes / Compute Resources / Cluster dashboard showing CPU and memory utilisation panels by namespace](docs/images/grafana-dashboard-example.png)
->*Grafana at `http://localhost:3000`, rendering a stock Kubernetes dashboard from metrics scraped by Prometheus and stored in Mimir — one of the many views this stack lights up.*
+>*Grafana at `http://localhost:3000`, rendering a stock Kubernetes dashboard from metrics scraped by the collector and stored in Mimir — one of the many views this stack lights up.*
 
 ```mermaid
 flowchart TB
     subgraph cluster["kind cluster"]
         pods["workload &amp; system pods"]
-        prom["Prometheus (KPS)"]
-        alloy["Alloy"]
-        mimir["Mimir"]
+        alloy["Alloy<br/>(metrics + logs + traces + profiles)"]
+        mimir["Mimir<br/>(+ ruler)"]
+        am["Alertmanager"]
         backends["Loki · Tempo · Pyroscope"]
         grafana["Grafana"]
 
-        pods -->|"scrape /metrics"| prom
-        pods -->|"logs · traces · profiles"| alloy
-        prom -->|remote_write| mimir
+        pods -->|"scrape /metrics · rules · logs · traces · profiles"| alloy
+        alloy -->|"metrics + rules → remote_write / mimir.rules"| mimir
         alloy -->|"logs → Loki<br/>traces → Tempo<br/>profiles → Pyroscope"| backends
+        mimir -->|"ruler evaluates → fires alerts"| am
         backends -->|"span / service-graph metrics (from Tempo)"| mimir
         mimir -->|provisioned datasources| grafana
+        am -->|provisioned datasources| grafana
         backends -->|provisioned datasources| grafana
     end
 
     grafana --> browser["you (browser)"]
 ```
 
-Prometheus **scrapes** the pods (pull, via ServiceMonitors) and remote-writes to
-Mimir; Alloy **receives/collects** logs, traces, and profiles and ships them to
-Loki / Tempo / Pyroscope. Grafana reads all four backends.
+*Default (`METRICS_MODE=alloy`) architecture. In the `METRICS_MODE=prometheus`
+toggle, Prometheus (deployed by kube-prometheus-stack) replaces Alloy for the
+metrics/rules path, Mimir's ruler is disabled, and Karma is deployed to read
+Alertmanager directly — see
+[architecture.md](docs/architecture.md#metrics-collection--alerting-two-modes)
+for the full breakdown, and [docs/solutions/README.md](docs/solutions/README.md#how-they-fit-together)
+for a side-by-side diagram of both modes.*
 
 ## Prerequisites
 
@@ -58,29 +73,33 @@ This setup uses **Podman** as the container runtime. The Makefile exports
 ## Quick start
 
 ```bash
-make up          # create cluster + deploy stack + Alloy + validate
-make down        # delete the cluster
+make up                                 # create cluster + deploy stack + Alloy + validate (METRICS_MODE=alloy, default)
+make up METRICS_MODE=prometheus         # ...or the original as-is setup (KPS Prometheus + Karma)
+make down                               # delete the cluster
 ```
 
 >[!TIP]
->Run `make help` to see every target.
+>Run `make help` to see every target. `METRICS_MODE` also applies to `make stack`,
+>`make kube-prometheus-stack`/`alloy`/`mimir`/`grafana`, and `make validate`.
 
 ## What gets deployed
 
 Everything lands in the `observability` namespace and is installed via Helm with
-locally controlled values files under [`helm/`](helm/).
+locally controlled values files under [`helm/`](helm/). Rows marked
+**(METRICS_MODE=prometheus)** are only deployed in that toggle; everything else
+is deployed in both modes.
 
 | Component | Chart | Version | Mode | Storage |
 |-----------|-------|---------|------|---------|
-| kube-prometheus-stack | `prometheus-community/kube-prometheus-stack` | 87.5.1 | Prometheus + operator + kube-state-metrics + node-exporter (Grafana & Windows exporter disabled) | ephemeral (2h local retention) |
-| Mimir     | `grafana/mimir-distributed` | 6.1.0 | minimal (1 replica/component, no zones/Kafka) | bundled MinIO |
+| kube-prometheus-stack | `prometheus-community/kube-prometheus-stack` | 87.5.1 | operator + kube-state-metrics + node-exporter + Alertmanager (Grafana & Windows exporter disabled); + Prometheus itself in **METRICS_MODE=prometheus** | ephemeral (2h local retention, when Prometheus runs) |
+| Mimir     | `grafana/mimir-distributed` | 6.1.0 | minimal (1 replica/component, no zones/Kafka); ruler enabled by default | bundled MinIO |
 | Loki      | `grafana/loki`   | 7.0.0  | SingleBinary (monolithic) | filesystem |
 | Tempo     | `grafana-community/tempo`  | 2.2.3 | single binary (monolithic) | filesystem |
 | Pyroscope | `grafana/pyroscope` | 2.1.0 | monolithic (`all` target) | filesystem |
 | Grafana   | `grafana-community/grafana` | 12.7.2 | — | ephemeral |
-| Alloy     | `grafana/alloy`  | 1.10.0 | DaemonSet collector (logs/traces/profiles) | — |
+| Alloy     | `grafana/alloy`  | 1.10.0 | DaemonSet collector — logs/traces/profiles, + metrics & rules by default (**METRICS_MODE=alloy**) | — |
 | Headlamp  | `headlamp/headlamp` | 0.43.0 | in-cluster dashboard (cluster-admin, no-login demo mode) | — |
-| Karma     | `helm/karma` (first-party) | v0.131 | alert dashboard over Alertmanager (reads all alerts) | — |
+| Karma     | `helm/karma` (first-party) | v0.131 | **(METRICS_MODE=prometheus)** alert dashboard over Alertmanager (reads all alerts) | — |
 
 Alongside the stack, `make up` also builds and deploys the **OpenTelemetry demo
 app** (`otel-demo-app`) into its own `otel-demo` namespace — via plain
@@ -92,19 +111,26 @@ below.
 The web UIs are `type: NodePort` services on fixed node ports, and the 
 kind node publishes those ports on the host via `extraPortMappings`:
 
-| UI            | Service nodePort | Host URL |
-|---------------|------------------|----------|
-| Grafana       | 30000            | http://localhost:3000  |
-| Alloy         | 30345            | http://localhost:12345 |
-| Prometheus    | 30090            | http://localhost:9090  |
-| Alertmanager  | 30093            | http://localhost:9093  |
-| Karma         | 30081            | http://localhost:8081  |
-| Headlamp      | 30466            | http://localhost:4466  |
-| Otel-Demo-App | 30080            | http://localhost:8080  |
+| UI            | Service nodePort | Host URL | Mode |
+|---------------|------------------|----------|------|
+| Grafana       | 30000            | http://localhost:3000  | both |
+| Alloy         | 30345            | http://localhost:12345 | both |
+| Alertmanager  | 30093            | http://localhost:9093  | both |
+| Prometheus    | 30090            | http://localhost:9090  | METRICS_MODE=prometheus |
+| Karma         | 30081            | http://localhost:8081  | METRICS_MODE=prometheus |
+| Headlamp      | 30466            | http://localhost:4466  | both |
+| Otel-Demo-App | 30080            | http://localhost:8080  | both |
+
+kind's `extraPortMappings` are static regardless of `METRICS_MODE`, so the
+Prometheus/Karma port mappings simply sit idle (nothing listening) in the
+default `alloy` mode — no `make down && make up` needed to switch modes.
 
 The node ports in [`helm/grafana/values.yaml`](helm/grafana/values.yaml),
 [`helm/alloy/values.yaml`](helm/alloy/values.yaml),
-[`helm/kube-prometheus-stack/values.yaml`](helm/kube-prometheus-stack/values.yaml),
+[`helm/kube-prometheus-stack/values-prometheus-metrics.yaml`](helm/kube-prometheus-stack/values-prometheus-metrics.yaml)
+(Prometheus's own nodePort only exists in that overlay),
+[`helm/kube-prometheus-stack/values.yaml`](helm/kube-prometheus-stack/values.yaml)
+(Alertmanager's, in both modes),
 [`helm/karma/values.yaml`](helm/karma/values.yaml),
 and [`helm/headlamp/values.yaml`](helm/headlamp/values.yaml)
 must match the `extraPortMappings` in [`kind/cluster.yaml`](kind/cluster.yaml).
@@ -136,13 +162,13 @@ New to the Grafana observability stack? [`docs/solutions/`](docs/solutions/) has
 short, beginner-friendly guide to each tool in this demo — what it is, what it's
 for, and how it's wired in here:
 
-- [Kube-Prometheus-Stack](docs/solutions/kube-prometheus-stack.md) — metrics collection (Prometheus, operator, exporters, Alertmanager)
-- [Mimir](docs/solutions/mimir.md) — long-term metrics storage
+- [Kube-Prometheus-Stack](docs/solutions/kube-prometheus-stack.md) — operator, exporters, Alertmanager (+ Prometheus itself in the `METRICS_MODE=prometheus` toggle)
+- [Mimir](docs/solutions/mimir.md) — long-term metrics storage + rule evaluation (ruler)
 - [Loki](docs/solutions/loki.md) — logs storage
 - [Tempo](docs/solutions/tempo.md) — traces storage
 - [Pyroscope](docs/solutions/pyroscope.md) — continuous profiling
-- [Alloy](docs/solutions/alloy.md) — the collection pipeline
-- [Karma](docs/solutions/karma.md) — alert dashboard for Alertmanager
+- [Alloy](docs/solutions/alloy.md) — the collection pipeline (all four signals by default)
+- [Karma](docs/solutions/karma.md) — alert dashboard for Alertmanager (`METRICS_MODE=prometheus` toggle only)
 - [Headlamp](docs/solutions/headlamp.md) — cluster UI
 - [Kind & Podman](docs/solutions/kind-and-podman.md) — the local platform
 
@@ -167,7 +193,7 @@ with `DEMO_LOADGEN=true`.
 | Signal   | App emits | Stack collects |
 |----------|-----------|----------------|
 | Traces   | OTLP/gRPC → Alloy | Alloy → Tempo |
-| Metrics  | `/metrics` (OTel Prometheus exporter) + `PodMonitor` | Prometheus → remote_write → Mimir |
+| Metrics  | `/metrics` (OTel Prometheus exporter) + `PodMonitor` | Alloy (default) or Prometheus (`METRICS_MODE=prometheus`) → remote_write → Mimir |
 | Logs     | `slog` JSON to stdout with a `trace_id` field | Alloy pod-log tail → Loki (auto-linked to traces) |
 | Profiles | Go `pprof` + `pyroscope.io/scrape` annotation | Alloy → Pyroscope |
 

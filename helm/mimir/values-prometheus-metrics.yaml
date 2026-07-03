@@ -1,0 +1,6 @@
+# Overlay applied on top of values.yaml only when METRICS_MODE=prometheus
+# (see the Makefile). Disables the ruler again: in this legacy toggle,
+# kube-prometheus-stack's own Prometheus evaluates PrometheusRules itself and
+# fires straight to its Alertmanager, so Mimir doesn't need to.
+ruler:
+  enabled: false

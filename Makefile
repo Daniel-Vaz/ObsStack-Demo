@@ -17,10 +17,35 @@ KIND_CONFIG  := kind/cluster.yaml
 HELM_DIR     := helm
 HELM_TIMEOUT ?= 10m
 
+# ---- Metrics collection mode ---------------------------------------------------
+# alloy      (default): Alloy scrapes ServiceMonitors/PodMonitors straight from
+#            the Prometheus-Operator CRDs and remote-writes to Mimir; Alloy also
+#            syncs PrometheusRules into Mimir's ruler, which evaluates them and
+#            fires to the (KPS-deployed) Alertmanager. KPS itself deploys only
+#            kube-state-metrics, node-exporter, the Operator, and Alertmanager —
+#            no Prometheus server. Karma is not deployed: Grafana Alerting (via
+#            the Mimir datasource) covers that role instead.
+# prometheus: the original setup — KPS's own Prometheus scrapes and
+#            evaluates rules, firing to its Alertmanager; Karma is deployed as
+#            Alertmanager's dashboard.
+# Toggle with: make up METRICS_MODE=prometheus
+METRICS_MODE ?= alloy
+ifeq ($(filter $(METRICS_MODE),alloy prometheus),)
+$(error METRICS_MODE must be 'alloy' or 'prometheus', got '$(METRICS_MODE)')
+endif
+
+# Per-chart overlay applied only in METRICS_MODE=prometheus, restoring today's
+# as-is behavior on top of each chart's alloy-mode-default values.yaml.
+KPS_EXTRA_VALUES     := $(if $(filter prometheus,$(METRICS_MODE)),--values $(HELM_DIR)/kube-prometheus-stack/values-prometheus-metrics.yaml,)
+ALLOY_EXTRA_VALUES   := $(if $(filter prometheus,$(METRICS_MODE)),--values $(HELM_DIR)/alloy/values-prometheus-metrics.yaml,)
+MIMIR_EXTRA_VALUES   := $(if $(filter prometheus,$(METRICS_MODE)),--values $(HELM_DIR)/mimir/values-prometheus-metrics.yaml,)
+GRAFANA_EXTRA_VALUES := $(if $(filter prometheus,$(METRICS_MODE)),--values $(HELM_DIR)/grafana/values-prometheus-metrics.yaml,)
+
 # ---- Demo application (apps/otel-demo) ----------------------------------------
 # An OTel-instrumented Go microservices app that feeds the stack's own
-# collectors (Alloy for traces/logs/profiles, Prometheus for metrics). It lives
-# in its own namespace and is built into local images loaded straight into kind.
+# collectors (Alloy for traces/logs/profiles, and — depending on METRICS_MODE —
+# either Alloy or Prometheus for metrics). It lives in its own namespace and is
+# built into local images loaded straight into kind.
 DEMO_NAMESPACE ?= otel-demo
 DEMO_DIR       := apps/otel-demo
 DEMO_SERVICES  := frontend checkout payment catalog loadgen
@@ -58,6 +83,7 @@ define helm_install
 			--version $(3) \
 			--namespace $(NAMESPACE) --create-namespace \
 			--values $(HELM_DIR)/$(1)/values.yaml \
+			$(4) \
 			--wait --timeout $(HELM_TIMEOUT) && break; \
 		if [ $$attempt -eq 3 ]; then \
 			echo ">> $(1): still not ready after $$attempt attempts" >&2; exit 1; \
@@ -110,11 +136,11 @@ namespace: ## Ensure the target namespace exists
 # ---- Individual component deploys --------------------------------------------
 .PHONY: kube-prometheus-stack mimir loki tempo pyroscope grafana alloy headlamp karma
 
-kube-prometheus-stack: repos namespace ## Deploy kube-prometheus-stack (Prometheus, Alertmanager, operator, KSM, node-exporter)
-	$(call helm_install,kube-prometheus-stack,prometheus-community/kube-prometheus-stack,$(KPS_VERSION))
+kube-prometheus-stack: repos namespace ## Deploy kube-prometheus-stack (Alertmanager, operator, KSM, node-exporter; + Prometheus in METRICS_MODE=prometheus)
+	$(call helm_install,kube-prometheus-stack,prometheus-community/kube-prometheus-stack,$(KPS_VERSION),$(KPS_EXTRA_VALUES))
 
 mimir: repos namespace ## Deploy Mimir (metrics)
-	$(call helm_install,mimir,grafana/mimir-distributed,$(MIMIR_VERSION))
+	$(call helm_install,mimir,grafana/mimir-distributed,$(MIMIR_VERSION),$(MIMIR_EXTRA_VALUES))
 
 loki: repos namespace ## Deploy Loki (logs)
 	$(call helm_install,loki,grafana/loki,$(LOKI_VERSION))
@@ -126,10 +152,10 @@ pyroscope: repos namespace ## Deploy Pyroscope (profiles)
 	$(call helm_install,pyroscope,grafana/pyroscope,$(PYROSCOPE_VERSION))
 
 grafana: repos namespace ## Deploy Grafana (with provisioned datasources)
-	$(call helm_install,grafana,grafana-community/grafana,$(GRAFANA_VERSION))
+	$(call helm_install,grafana,grafana-community/grafana,$(GRAFANA_VERSION),$(GRAFANA_EXTRA_VALUES))
 
-alloy: repos namespace ## Deploy Alloy (telemetry collector)
-	$(call helm_install,alloy,grafana/alloy,$(ALLOY_VERSION))
+alloy: repos namespace ## Deploy Alloy (telemetry collector; scrapes metrics too in default METRICS_MODE=alloy)
+	$(call helm_install,alloy,grafana/alloy,$(ALLOY_VERSION),$(ALLOY_EXTRA_VALUES))
 
 headlamp: repos namespace ## Deploy Headlamp (cluster web UI)
 	$(call helm_install,headlamp,headlamp/headlamp,$(HEADLAMP_VERSION))
@@ -155,14 +181,22 @@ karma: namespace ## Deploy Karma (Alertmanager alert dashboard) from its local c
 .PHONY: backends stack
 backends: mimir loki tempo pyroscope ## Deploy the four LGTM backends
 # kube-prometheus-stack goes first: it installs the Prometheus-operator CRDs
-# (ServiceMonitor, ...) that every other chart's values now reference, plus the
-# Alertmanager that Karma reads from.
-stack: kube-prometheus-stack backends grafana headlamp karma ## Deploy Prometheus stack + backends + Grafana + Headlamp + Karma
+# (ServiceMonitor, PodMonitor, PrometheusRule, ...) that every other chart's
+# values (and Alloy, in METRICS_MODE=alloy) now reference, plus the
+# Alertmanager that Karma / Mimir's ruler fires to.
+# Karma is only deployed in the legacy METRICS_MODE=prometheus toggle — in the
+# default alloy mode, Grafana Alerting (via the Mimir datasource) covers that role.
+stack: kube-prometheus-stack backends grafana headlamp $(if $(filter prometheus,$(METRICS_MODE)),karma,) ## Deploy Prometheus-operator stack + backends + Grafana + Headlamp (+ Karma in METRICS_MODE=prometheus)
 
 .PHONY: up
 up: cluster stack alloy validate demo ## Full setup: cluster + stack + Alloy + validate + demo app
 	@echo
-	@echo "Done. Grafana http://localhost:3000 (admin/admin) · Alloy http://localhost:12345 · Prometheus http://localhost:9090 · Alertmanager http://localhost:9093 · Karma http://localhost:8081 · Headlamp http://localhost:4466 · Demo UI http://localhost:8080."
+	@echo "Done. (METRICS_MODE=$(METRICS_MODE)) Grafana http://localhost:3000 (admin/admin) · Alloy http://localhost:12345 · Alertmanager http://localhost:9093 · Headlamp http://localhost:4466 · Demo UI http://localhost:8080."
+	@if [ "$(METRICS_MODE)" = "prometheus" ]; then \
+		echo "Prometheus http://localhost:9090 · Karma http://localhost:8081."; \
+	else \
+		echo "Metrics: Alloy scrapes via Operator CRDs -> Mimir; Mimir's ruler evaluates PrometheusRules -> Alertmanager. View alerts in Grafana Alerting or at the Alertmanager URL above."; \
+	fi
 
 # ---- Validation & tests ------------------------------------------------------
 .PHONY: status
@@ -172,7 +206,7 @@ status: ## Show pods and helm releases in the namespace
 
 .PHONY: validate
 validate: ## Check that all workloads are ready and datasources are healthy
-	@NAMESPACE=$(NAMESPACE) ./scripts/validate.sh
+	@NAMESPACE=$(NAMESPACE) METRICS_MODE=$(METRICS_MODE) ./scripts/validate.sh
 
 # ---- Access helpers ----------------------------------------------------------
 .PHONY: grafana-ui
