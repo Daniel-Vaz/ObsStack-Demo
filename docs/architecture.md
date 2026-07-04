@@ -157,12 +157,9 @@ So we expose the UIs the way that actually works on this setup:
 `kind/cluster.yaml` and the chart values must stay in sync, and changing them needs a
 `make down && make up`.
 
-Karma (`METRICS_MODE=prometheus` only, 30081 -> `http://localhost:8081`) and kagent
-(optional, `make ai`, 30890 -> `http://localhost:8090`) follow the same pattern but
-aren't part of the always-on `make up` stack, so they're left off the table above.
-kagent's case is a variant worth a callout: its own chart has no pinned-`nodePort`
-field to set, so a supplementary Service does the pinning instead — see the
-[AI agent section](#ai-agent-kagent--ollama) below for that one.
+Karma (`METRICS_MODE=prometheus` only, 30081 -> `http://localhost:8081`) follows the
+same pattern but isn't part of the always-on `make up` stack in the default
+`alloy` mode, so it's left off the table above.
 
 ## Cluster UI: Headlamp
 
@@ -186,20 +183,12 @@ telemetry view. See [`helm/headlamp/values.yaml`](../helm/headlamp/values.yaml).
 Grafana is no longer deployed from the `grafana-community/grafana` Helm chart. It's now
 fully managed by the [Grafana Operator](https://github.com/grafana/grafana-operator)
 (`grafana/grafana-operator`, deployed by `make grafana-operator`): a `Grafana` custom
-resource stands up the instance, `GrafanaDatasource` CRs provision each datasource, and
-a `GrafanaServiceAccount` CR provisions the token [kagent](#ai-agent-kagent--ollama)'s
-`grafana-mcp` needs — no Helm `values.yaml` datasource blob, no imperative bootstrap
-script. See the first-party chart [`helm/grafana`](../helm/grafana), whose `templates/`
-now just renders CRs (plus a bit of RBAC and a ConfigMap) rather than owning a Deployment
-directly — the Operator does that.
+resource stands up the instance and `GrafanaDatasource` CRs provision each datasource —
+no Helm `values.yaml` datasource blob, no imperative bootstrap script. See the
+first-party chart [`helm/grafana`](../helm/grafana), whose `templates/` now just renders
+CRs (plus a bit of RBAC and a ConfigMap) rather than owning a Deployment directly — the
+Operator does that.
 
-- **Why the switch**: kagent's `grafana-mcp` needs a Grafana *application-level* service
-  account + token to call the Grafana API — something that (unlike everything else in
-  this demo) can't be expressed as a static Helm value, since a token is only ever
-  returned once, at creation time. The Grafana Operator's `GrafanaServiceAccount` CRD
-  solves exactly this: point it at a Grafana instance, and the Operator creates the
-  service account, generates a token, and writes it into a named Secret — fully
-  declarative, reconciled continuously like everything else here.
 - **Everything provisioned as CRs, not files**: `templates/datasources.yaml` renders one
   `GrafanaDatasource` per entry in `values.yaml`'s `datasources` list (same fields as
   before: `uid`, `type`, `url`, `isDefault`, `jsonData` — including the Tempo/Loki/Mimir/
@@ -239,8 +228,7 @@ directly — the Operator does that.
   clobbers the original (omitting `targetPort` would blank it to `0`).
 - **New Service name**: the Operator names the generated Service `"<release>-service"` —
   `grafana-service`, not `grafana` — a naming convention this chart doesn't control.
-  [`scripts/validate.sh`](../scripts/validate.sh) and `grafana-mcp.grafana.url` in
-  [`helm/kagent/values.yaml`](../helm/kagent/values.yaml) reference it by that name.
+  [`scripts/validate.sh`](../scripts/validate.sh) references it by that name.
 - **`helm --wait` doesn't know about the Grafana CR**: it only tracks resource kinds Helm
   understands the readiness of (Deployments, Services, ...); a bare `Grafana`/
   `GrafanaDatasource` CR isn't one of them, and the Operator's own `GrafanaReady`
@@ -252,100 +240,74 @@ directly — the Operator does that.
 - **No persistence**: unchanged from before — dashboards/datasources are provisioned as
   code, so the Grafana pod stays intentionally ephemeral.
 
-## AI agent: kagent + Ollama
+## AI assistant: Grafana LLM plugin + Graft + Ollama
 
-[kagent](https://github.com/kagent-dev/kagent) (`oci://ghcr.io/kagent-dev/kagent/helm/{kagent-crds,kagent}`)
-is a Kubernetes-native AI agent framework, deployed alongside
-[Ollama](https://github.com/otwld/ollama-helm) (`ollama-helm/ollama`) as an
-**optional** addition — `make ai`, not part of `make up`/`make stack`. See
-[`helm/ollama/values.yaml`](../helm/ollama/values.yaml) and
-[`helm/kagent/values.yaml`](../helm/kagent/values.yaml).
+The demo ships an in-Grafana AI assistant that runs entirely on a local model —
+no external LLM API key. It's three pieces, all deployed by `make up`: two
+Grafana plugins installed by the [`helm/grafana`](../helm/grafana) chart, and
+[Ollama](https://github.com/otwld/ollama-helm) (`ollama-helm/ollama`) serving
+the model. See [`helm/grafana/values.yaml`](../helm/grafana/values.yaml)'s
+`llm`/`graft` blocks and [`helm/ollama/values.yaml`](../helm/ollama/values.yaml).
 
-**The point of this pairing**: **ObsAgent**, a single Kubernetes observability
-AI agent expert — one that queries this stack's own live telemetry
-(Mimir/Loki/Tempo/Pyroscope via Grafana, plus the cluster itself) and can act
-on what it finds, running entirely on a local model so the demo stays
-self-contained (no external LLM API key). ObsAgent is a **custom `Agent`
-CRD** — [`helm/kagent/obs-agent.yaml`](../helm/kagent/obs-agent.yaml),
-applied via `kubectl apply` right after the Helm install (the chart is
-OCI-sourced, with nowhere local to template a custom agent into it). It's
-built on: the kagent controller/UI/tools runtime, Ollama serving `llama3.1:8b`,
-and OpenTelemetry tracing/logging into this stack's own Alloy collector so
-ObsAgent's own behavior is as observable as anything else here.
+- [**grafana-llm-app**](https://grafana.com/grafana/plugins/grafana-llm-app/) —
+  Grafana's official LLM plugin, the model gateway. It's provisioned with
+  `provider: custom` (OpenAI wire format, no API key required) pointed at
+  Ollama's OpenAI-compatible endpoint (`http://ollama.observability.svc.cluster.local:11434`,
+  the plugin appends `/v1`). Its abstract `base`/`large` model slots both map to
+  `llama3.1:8b`.
+- [**Graft**](https://github.com/vikshana/vikshana-graft-app)
+  (`vikshana-graft-app`) — a community "AI Assistant for Grafana" app plugin
+  that layers a natural-language chat UI on top of grafana-llm-app, using
+  Grafana's built-in MCP tools (run in-process against the logged-in session) to
+  query dashboards, metrics, logs, traces, and alerts. Find it in the Grafana
+  nav at `http://localhost:3000`.
+- **Ollama** — serves `llama3.1:8b` on CPU as the model backend.
 
-- **Opt-in, not default**: even at this stage it's the heaviest thing in the
-  repo — Ollama alone wants multiple CPUs and several GiB of RAM for
-  CPU-only `llama3.1:8b` inference (see `helm/ollama/values.yaml`'s `resources`).
-  `make up` deploys the observability stack only; run `make ai` separately
-  when you actually want it.
-- **No stock agents — ObsAgent instead**: the kagent chart ships ~10
-  optional built-in agents (k8s/kgateway/istio/argo-rollouts/cilium/helm/
-  promql/observability), each its own always-on Deployment. All are
-  explicitly disabled in [`helm/kagent/values.yaml`](../helm/kagent/values.yaml)
-  — including `k8s-agent` and `observability-agent`, the two stock agents
-  closest to ObsAgent's job — since this demo spends that pod budget on one
-  purpose-built agent instead of several overlapping stock ones. ObsAgent's
-  tools: `k8s_*`, `helm_*`, `prometheus_*`, and `datetime_get_current_time`
-  from kagent's own built-in tool server (explicit `toolNames`, since the
-  `Agent` CRD caps that field at 50 entries), plus **every** tool
-  `grafana-mcp` exposes (`toolNames` deliberately omitted — kagent's Python
-  ADK runtime treats an empty/omitted tool filter as "no filtering," per
-  `google-adk`'s `BaseToolset._is_tool_selected()`; listing all ~65
-  grafana-mcp tools explicitly would blow past that same 50-item cap).
-- **Local model, no API key**: Ollama serves `llama3.1:8b` on CPU
-  (`ollama.observability.svc.cluster.local:11434`); kagent's default
-  `ModelConfig` points at it (`providers.default: ollama`), so no
-  `OPENAI_API_KEY`-style secret exists anywhere in this demo. The chart's
-  `num_ctx` default (64000, sized for llama3.2) is overridden down to 4096 —
-  at 64K it would exceed Ollama's 8Gi memory limit on CPU-only inference.
-- **CRDs installed separately**: `kagent-crds` (a distinct chart) must land
-  before `kagent`, the standard Helm pattern for CRD lifecycle — see the
-  Makefile's `kagent-crds` -> `kagent` ordering. `ollama` and `grafana` are
-  real prerequisites of `kagent` too (not just readiness ordering): kagent's
-  `ModelConfig` needs Ollama's Service to exist, and ObsAgent's `grafana-mcp`
-  tool server needs the Secret `helm/grafana`'s `GrafanaServiceAccount` CR
-  produces.
-- **The Grafana service-account token is provisioned entirely declaratively**:
-  a `GrafanaServiceAccount` CR in [`helm/grafana`](../helm/grafana) has the
-  Grafana Operator create the service account, generate a token, and write
-  it to a Secret — no manual step. See
-  [Grafana: Operator-managed via CRDs](#grafana-operator-managed-via-crds)
-  below for why that Secret's token key ("token") needs a small adapter
-  (`GRAFANA_SERVICE_ACCOUNT_TOKEN_FILE`) rather than a direct `secretRef`.
-- **OTel traces + logs into this stack's own Alloy**: `otel.tracing.enabled`
-  / `otel.logging.enabled` point kagent's controller, UI-adjacent components,
-  and `kagent-tools` (which has its *own*, separately-namespaced `otel` block
-  in the chart — not inherited from the top-level one) at
-  `alloy.observability.svc.cluster.local:4317`, the same OTLP endpoint the
-  otel-demo app uses. Traces need no changes on Alloy's side — its existing
-  `otelcol.receiver.otlp` -> `otelcol.processor.batch` -> `otelcol.exporter.otlp`
-  pipeline already forwards to Tempo. **Logs did**: Alloy's OTLP receiver
-  previously only had a `traces` output wired up, so
-  [`helm/alloy/values.yaml`](../helm/alloy/values.yaml) (and its
-  `values-prometheus-metrics.yaml` twin) adds a `logs` output ->
-  `otelcol.processor.attributes` (tags `service.name`/`service.namespace` as
-  `loki.resource.labels` hints — `otelcol.exporter.loki` doesn't promote OTLP
-  attributes to Loki labels on its own) -> `otelcol.exporter.loki` ->
-  the same `loki.write` receiver pod-tailed logs already use. kagent's
-  container stdout is *also* tailed like every other pod's, so this bridge
-  specifically covers the logs it emits natively over OTLP.
-- **Web UI via a supplementary Service**: kagent's own UI Service template
-  only supports `type`, not a fixed `nodePort`, unlike every other chart in
-  this demo — so it can't get a pinned kind `extraPortMapping` through Helm
-  values the way the rest do. `helm/kagent/kagent-ui-nodeport.yaml` is a
-  second, independent `NodePort` Service selecting the exact same pods (same
-  selector labels as the chart's own `kagent-ui` Service), applied via
-  `kubectl apply` right after the Helm install (see the Makefile's `kagent`
-  target). `kind/cluster.yaml`'s `extraPortMappings` maps hostPort 8090 to
-  its nodePort 30890, so `http://localhost:8090` (`make kagent-ui`) works
-  exactly like every other UI here — no port-forward needed.
-- **No persistence for Ollama**: like the rest of this demo, storage is
-  ephemeral. `llama3.1:8b` (~4.9GB) is re-pulled by a postStart hook on every pod
-  start; a PVC wouldn't survive `make down` anyway on this kind/Podman setup
-  (see [`helm/ollama/values.yaml`](../helm/ollama/values.yaml)). Kubernetes
+How the chart wires the plugins (see
+[`templates/grafana.yaml`](../helm/grafana/templates/grafana.yaml)):
+
+- **Installed at startup via `GF_INSTALL_PLUGINS`**: the Operator's grafana
+  container fetches each listed plugin before Grafana boots. grafana-llm-app is
+  a plain catalog id; Graft is **not in the catalog**, so it's installed from a
+  release-zip URL in `<url>;<plugin-id>` form. Graft is also **unsigned**, so
+  its id is added to `allow_loading_unsigned_plugins` in the `Grafana` CR config
+  — Grafana refuses to load unsigned plugins otherwise.
+- **Configured via file-based plugin provisioning**: a ConfigMap
+  (`grafana-plugins-provisioning`) is mounted at
+  `/etc/grafana/provisioning/plugins` — the same ConfigMap mechanism the chart
+  uses for dashboards. It holds the LLM plugin's provider config and a stanza
+  that enables the Graft app by default. Both plugin blocks are gated on their
+  `enabled` values, so setting `llm.enabled: false` / `graft.enabled: false`
+  cleanly drops the env entries, the unsigned allow-list, and the provisioning.
+- **Graft is pinned to v0.2.0**: upstream's build/publish workflow only fires on
+  legacy `v*` tags, but releases are now tagged `graft-v*`, so v0.2.0 is the
+  newest tag that actually ships a prebuilt zip (the v0.3.0–v0.6.x sources have
+  no downloadable artifact). Bump `graft.pluginUrl` if upstream publishes newer
+  builds again.
+
+On Ollama itself:
+
+- **Part of `make up`, but the heaviest component**: Ollama wants multiple CPUs
+  and several GiB of RAM for CPU-only `llama3.1:8b` inference (see
+  `helm/ollama/values.yaml`'s `resources`), so responses are slow (~30s+). It's
+  folded into `make up` because Graft has no backend without it.
+- **Local model, no API key**: nothing points at a hosted provider, so no
+  `OPENAI_API_KEY`-style secret exists anywhere in this demo.
+- **No persistence**: like the rest of this demo, storage is ephemeral.
+  `llama3.1:8b` (~4.7GB) is re-pulled by a postStart hook on every pod start; a
+  PVC wouldn't survive `make down` anyway on this kind/Podman setup. Kubernetes
   doesn't mark the container `Running` until that hook completes, so
   `OLLAMA_TIMEOUT` (default `20m`, see the Makefile) gives `helm --wait` much
   more room than the default `HELM_TIMEOUT`.
+
+Separately, Alloy's OTLP receiver also forwards **logs** (not just traces) to
+Loki — any in-cluster workload that emits logs over OTLP (rather than only
+stdout) lands there. [`helm/alloy/values.yaml`](../helm/alloy/values.yaml) (and
+its `values-prometheus-metrics.yaml` twin) wires a `logs` output ->
+`otelcol.processor.attributes` (tags `service.name`/`service.namespace` as
+`loki.resource.labels` hints — `otelcol.exporter.loki` doesn't promote OTLP
+attributes to Loki labels on its own) -> `otelcol.exporter.loki` -> the same
+`loki.write` receiver pod-tailed logs already use.
 
 ## Data flow
 
@@ -385,8 +347,7 @@ Metrics collection is described above; Alloy config lives in
   a Helm chart at all — see [Grafana: Operator-managed via CRDs](#grafana-operator-managed-via-crds)
   below. kube-prometheus-stack comes from the **`prometheus-community`** repo. Mimir,
   Loki, Pyroscope, Alloy, and the Grafana Operator still come from the `grafana` repo.
-  `make repos` registers all of these (Ollama's `ollama-helm` repo too); kagent is the
-  one exception, installed straight from an OCI registry with no `helm repo add` step.
+  `make repos` registers all of these (Ollama's `ollama-helm` repo too).
 - **Log de-duplication**: `loki.source.kubernetes` tails via the Kubernetes API, so on a
   *multi-node* cluster every DaemonSet pod would tail every pod's logs. Fine for the
   single-node kind demo; enable Alloy clustering (or switch to `loki.source.file` with

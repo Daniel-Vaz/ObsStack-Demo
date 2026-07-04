@@ -74,7 +74,6 @@ ALLOY_VERSION          := 1.10.0
 KPS_VERSION            := 87.5.1
 HEADLAMP_VERSION       := 0.43.0
 OLLAMA_VERSION         := 1.65.0
-KAGENT_VERSION         := 0.9.11
 
 # ollama's postStart hook pulls the llama3 model (~4.7GB) on first start, and
 # Kubernetes doesn't mark the container "Running" (so readiness, and thus
@@ -141,16 +140,13 @@ repos: ## Add and update the Grafana + Prometheus + Ollama helm repos
 	@helm repo add ollama-helm https://otwld.github.io/ollama-helm/ >/dev/null
 	@helm repo update grafana grafana-community prometheus-community headlamp ollama-helm >/dev/null
 	@echo "Helm repos up to date."
-	@# kagent ships from an OCI registry (ghcr.io/kagent-dev/kagent/helm/...), not
-	@# a classic chart repo, so `helm upgrade --install` references it directly by
-	@# oci:// URL in the kagent-crds/kagent targets below — no `helm repo add` needed.
 
 .PHONY: namespace
 namespace: ## Ensure the target namespace exists
 	@kubectl get namespace $(NAMESPACE) >/dev/null 2>&1 || kubectl create namespace $(NAMESPACE)
 
 # ---- Individual component deploys --------------------------------------------
-.PHONY: kube-prometheus-stack mimir loki tempo pyroscope grafana-operator grafana alloy headlamp karma ollama kagent-crds kagent
+.PHONY: kube-prometheus-stack mimir loki tempo pyroscope grafana-operator grafana alloy headlamp karma ollama
 
 kube-prometheus-stack: repos namespace ## Deploy kube-prometheus-stack (Alertmanager, operator, KSM, node-exporter; + Prometheus in METRICS_MODE=prometheus)
 	$(call helm_install,kube-prometheus-stack,prometheus-community/kube-prometheus-stack,$(KPS_VERSION),$(KPS_EXTRA_VALUES))
@@ -172,7 +168,7 @@ grafana-operator: repos namespace ## Deploy the Grafana Operator (reconciles hel
 
 grafana: namespace grafana-operator ## Deploy Grafana (Operator-managed via CRDs; provisioned datasources) from its local chart
 	@# First-party local chart (helm/grafana) of CRDs (Grafana, GrafanaDatasource,
-	@# GrafanaServiceAccount, ...) — no external repo, so it skips `repos` and
+	@# ...) — no external repo, so it skips `repos` and
 	@# passes a chart path instead of a repo/chart ref. Same retry loop as
 	@# helm_install, minus the --version flag (invalid for local paths).
 	@for attempt in 1 2 3; do \
@@ -202,17 +198,12 @@ grafana: namespace grafana-operator ## Deploy Grafana (Operator-managed via CRDs
 	@kubectl wait --for=condition=Available deployment/grafana-deployment -n $(NAMESPACE) --timeout=$(HELM_TIMEOUT)
 	@# The Grafana pod being Available only means it's serving HTTP — the
 	@# Operator still has to separately call Grafana's own API to actually
-	@# create the datasources/service-account token (GrafanaDatasource /
-	@# GrafanaServiceAccount CRs, reconciled async, same as the Deployment
-	@# above). Wait for those too, or `make validate`/kagent's grafana-mcp can
-	@# race ahead of an instance that's "up" but not yet provisioned.
+	@# create the datasources (GrafanaDatasource CRs, reconciled async, same as
+	@# the Deployment above). Wait for those too, or `make validate` can race
+	@# ahead of an instance that's "up" but not yet provisioned.
 	@echo ">> grafana: waiting for datasources to sync into Grafana..."
 	@kubectl wait --for=condition=DatasourceSynchronized \
 		-l app.kubernetes.io/instance=grafana grafanadatasources.grafana.integreatly.org \
-		-n $(NAMESPACE) --timeout=$(HELM_TIMEOUT)
-	@echo ">> grafana: waiting for the kagent grafana-mcp service-account token..."
-	@kubectl wait --for=condition=ServiceAccountSynchronized \
-		-l app.kubernetes.io/instance=grafana grafanaserviceaccounts.grafana.integreatly.org \
 		-n $(NAMESPACE) --timeout=$(HELM_TIMEOUT)
 
 alloy: repos namespace ## Deploy Alloy (telemetry collector; scrapes metrics too in default METRICS_MODE=alloy)
@@ -238,26 +229,11 @@ karma: namespace ## Deploy Karma (Alertmanager alert dashboard) from its local c
 		sleep 15; \
 	done
 
-ollama: repos namespace ## Deploy Ollama and pull the llama3 model (kagent's local LLM provider)
+ollama: repos namespace ## Deploy Ollama and pull the llama3 model (LLM backend for Grafana's Graft AI assistant)
 	$(call helm_install,ollama,ollama-helm/ollama,$(OLLAMA_VERSION),,$(OLLAMA_TIMEOUT))
 
-kagent-crds: namespace ## Deploy kagent's CRDs (must land before the kagent target)
-	@# OCI chart, so no `repos`/`helm repo add` dependency — see the `repos` target.
-	$(call helm_install,kagent-crds,oci://ghcr.io/kagent-dev/kagent/helm/kagent-crds,$(KAGENT_VERSION))
-
-kagent: namespace kagent-crds ollama grafana ## Deploy kagent (AI agent framework), wired to Ollama + Grafana + this stack's OTel pipeline
-	$(call helm_install,kagent,oci://ghcr.io/kagent-dev/kagent/helm/kagent,$(KAGENT_VERSION))
-	@# Supplementary NodePort Service for the UI — the chart's own UI Service
-	@# has no pinned-nodePort field to set via values. See the file's own
-	@# header comment and kind/cluster.yaml's extraPortMappings.
-	@kubectl apply -f $(HELM_DIR)/kagent/kagent-ui-nodeport.yaml
-	@# ObsAgent: the Kubernetes Observability AI Agent Expert. A raw manifest,
-	@# not a chart template — kagent's chart is OCI-sourced with nowhere
-	@# local to add it. See the file's own header comment.
-	@kubectl apply -f $(HELM_DIR)/kagent/obs-agent.yaml
-
 # ---- Grouped deploys ---------------------------------------------------------
-.PHONY: backends stack ai
+.PHONY: backends stack
 backends: mimir loki tempo pyroscope ## Deploy the four LGTM backends
 # kube-prometheus-stack goes first: it installs the Prometheus-operator CRDs
 # (ServiceMonitor, PodMonitor, PrometheusRule, ...) that every other chart's
@@ -267,20 +243,13 @@ backends: mimir loki tempo pyroscope ## Deploy the four LGTM backends
 # default alloy mode, Grafana Alerting (via the Mimir datasource) covers that role.
 stack: kube-prometheus-stack backends grafana headlamp $(if $(filter prometheus,$(METRICS_MODE)),karma,) ## Deploy Prometheus-operator stack + backends + Grafana + Headlamp (+ Karma in METRICS_MODE=prometheus)
 
-# kagent itself declares real prerequisites (kagent-crds, ollama, grafana —
-# its ModelConfig and grafana-mcp need those services already up), so `ai`
-# just needs to ask for kagent; Make resolves the rest. NOT part of `up` /
-# `stack` — it's an opt-in extra (`make ai`), not deployed by default: even
-# at this stage it's the heaviest thing in the repo (Ollama alone wants
-# multiple CPUs and several GiB of RAM for CPU-only llama3 inference; see
-# helm/ollama/values.yaml), and most of the time you don't need it to work
-# with the rest of the stack. Run `make alloy` first if you deploy `ai` on
-# its own outside of `make up` — kagent's OTel traces/logs need Alloy's OTLP
-# receiver already listening.
-ai: ollama kagent-crds kagent ## (optional, not part of `up`) Deploy Ollama (llama3) + kagent, the local AI agent framework
-
 .PHONY: up
-up: cluster stack alloy validate demo ## Full setup: cluster + stack + Alloy + validate + demo app (run `make ai` separately for Ollama/kagent)
+# Ollama is part of the default flow because Grafana's Graft AI assistant (and
+# the grafana-llm-app plugin it builds on — see helm/grafana/values.yaml) use it
+# as their local model backend. It's the heaviest thing in the repo (multiple
+# CPUs + several GiB of RAM for CPU-only llama3 inference, ~4.7GB model pull;
+# see helm/ollama/values.yaml), so expect the first `make up` to take a while.
+up: cluster stack alloy ollama validate demo ## Full setup: cluster + stack + Alloy + Ollama + validate + demo app
 	@echo
 	@echo "Done. (METRICS_MODE=$(METRICS_MODE)) Grafana http://localhost:3000 (admin/admin) · Alloy http://localhost:12345 · Alertmanager http://localhost:9093 · Headlamp http://localhost:4466 · Demo UI http://localhost:8080."
 	@if [ "$(METRICS_MODE)" = "prometheus" ]; then \
@@ -288,7 +257,7 @@ up: cluster stack alloy validate demo ## Full setup: cluster + stack + Alloy + v
 	else \
 		echo "Metrics: Alloy scrapes via Operator CRDs -> Mimir; Mimir's ruler evaluates PrometheusRules -> Alertmanager. View alerts in Grafana Alerting or at the Alertmanager URL above."; \
 	fi
-	@echo "Optional: 'make ai' deploys the local AI agent stack (Ollama + kagent) — off by default, resource-heavy."
+	@echo "AI: Grafana ships the Graft assistant (LLM plugin -> Ollama). Open Grafana and find 'Graft' in the nav."
 
 # ---- Validation & tests ------------------------------------------------------
 .PHONY: status
@@ -325,10 +294,6 @@ headlamp-ui: ## Show the Headlamp UI URL
 karma-ui: ## Show the Karma alert dashboard URL
 	@echo "Karma at http://localhost:8081 (alert dashboard for Alertmanager)."
 
-.PHONY: kagent-ui
-kagent-ui: ## Show the kagent web UI URL
-	@echo "kagent UI at http://localhost:8090."
-
 .PHONY: demo-ui
 demo-ui: ## Show the demo app's web UI URL (or port-forward on older clusters)
 	@echo "otel-demo web UI at http://localhost:8080."
@@ -343,10 +308,10 @@ logs-alloy: ## Tail Alloy logs
 # ---- Teardown ----------------------------------------------------------------
 .PHONY: clean
 clean: ## Uninstall all helm releases (keep the cluster)
-	-@for r in kagent kagent-crds ollama karma headlamp alloy grafana grafana-operator pyroscope tempo loki mimir kube-prometheus-stack; do \
+	-@for r in ollama karma headlamp alloy grafana grafana-operator pyroscope tempo loki mimir kube-prometheus-stack; do \
 		helm uninstall $$r -n $(NAMESPACE) 2>/dev/null || true; \
 	done
-	@echo "Releases removed. (Prometheus-operator + kagent + Grafana Operator CRDs are left in place; kind delete removes them.)"
+	@echo "Releases removed. (Prometheus-operator + Grafana Operator CRDs are left in place; kind delete removes them.)"
 
 .PHONY: down
 down: ## Delete the kind cluster

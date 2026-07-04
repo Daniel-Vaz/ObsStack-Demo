@@ -73,9 +73,8 @@ This setup uses **Podman** as the container runtime. The Makefile exports
 ## Quick start
 
 ```bash
-make up                                 # create cluster + deploy stack + Alloy + validate (METRICS_MODE=alloy, default)
+make up                                 # create cluster + deploy stack + Alloy + Ollama + validate (METRICS_MODE=alloy, default)
 make up METRICS_MODE=prometheus         # ...or the original as-is setup (KPS Prometheus + Karma)
-make ai                                 # optional: Ollama + kagent (AI agent framework) — not part of `make up`
 make down                               # delete the cluster
 ```
 
@@ -87,9 +86,8 @@ make down                               # delete the cluster
 
 Everything lands in the `observability` namespace and is installed via Helm with
 locally controlled values files under [`helm/`](helm/). Rows marked
-**(METRICS_MODE=prometheus)** are only deployed in that toggle; rows marked
-**(make ai)** are an opt-in extra, not part of `make up`; everything else is
-deployed in both metrics modes by `make up`.
+**(METRICS_MODE=prometheus)** are only deployed in that toggle; everything else
+is deployed in both metrics modes by `make up`.
 
 | Component | Chart | Version | Mode | Storage |
 |-----------|-------|---------|------|---------|
@@ -99,33 +97,27 @@ deployed in both metrics modes by `make up`.
 | Tempo     | `grafana-community/tempo`  | 2.2.3 | single binary (monolithic) | filesystem |
 | Pyroscope | `grafana/pyroscope` | 2.1.0 | monolithic (`all` target) | filesystem |
 | Grafana Operator | `grafana/grafana-operator` | 5.24.0 | reconciles `helm/grafana`'s CRDs into a running Grafana | — |
-| Grafana   | `helm/grafana` (first-party CRs: `Grafana`, `GrafanaDatasource`, `GrafanaServiceAccount`) | operator-managed | provisioned datasources + KPS dashboards via k8s-sidecar | ephemeral |
+| Grafana   | `helm/grafana` (first-party CRs: `Grafana`, `GrafanaDatasource`) | operator-managed | provisioned datasources + KPS dashboards via k8s-sidecar; installs the `grafana-llm-app` + Graft AI plugins (backed by Ollama) | ephemeral |
 | Alloy     | `grafana/alloy`  | 1.10.0 | DaemonSet collector — logs/traces/profiles, + metrics & rules by default (**METRICS_MODE=alloy**) | — |
 | Headlamp  | `headlamp/headlamp` | 0.43.0 | in-cluster dashboard (cluster-admin, no-login demo mode) | — |
 | Karma     | `helm/karma` (first-party) | v0.131 | **(METRICS_MODE=prometheus)** alert dashboard over Alertmanager (reads all alerts) | — |
-| Ollama    | `ollama-helm/ollama` | 1.65.0 | **(make ai)** CPU inference, serves the `llama3.1:8b` model | none (re-pulled on pod start) |
-| kagent    | `oci://ghcr.io/kagent-dev/kagent/helm/{kagent-crds,kagent}` | 0.9.11 | **(make ai)** runs **ObsAgent**, a custom observability-expert `Agent` CRD (no stock agents enabled); `grafana-mcp` + kagent's k8s/helm/prometheus tools, backed by Ollama + this Grafana, OTel tracing/logging on | bundled Postgres (dev/eval only) |
+| Ollama    | `ollama-helm/ollama` | 1.65.0 | CPU inference, serves the `llama3.1:8b` model — model backend for Grafana's Graft AI assistant | none (re-pulled on pod start) |
 
 Alongside the stack, `make up` also builds and deploys the **OpenTelemetry demo
 app** (`otel-demo-app`) into its own `otel-demo` namespace — via plain
 Kubernetes manifests rather than Helm. See [Demo application](#demo-application)
 below.
 
-`make ai` (optional — **not** part of `make up`, since even at this stage
-it's the heaviest thing in the repo) deploys **Ollama + kagent**, running
-**ObsAgent**: a Kubernetes observability AI agent expert that queries this
-stack's own live telemetry (Mimir/Loki/Tempo/Pyroscope via Grafana, plus the
-cluster itself) and can act on what it finds. Ollama serves the `llama3.1:8b`
-model locally, so no external LLM API key is ever needed. ObsAgent is a
-custom `Agent` CRD ([`helm/kagent/obs-agent.yaml`](helm/kagent/obs-agent.yaml))
-rather than one of kagent's stock agents, with tools spanning
-Kubernetes/Helm/Prometheus (kagent's own tool server) and all of `grafana-mcp`
-(dashboards, Mimir, Loki, Pyroscope, alerting, and more). kagent's
-traces/logs flow through this stack's own Alloy collector into Tempo and
-Loki, same as the demo app. Its web UI is at `http://localhost:8090`
-(`make kagent-ui`) via a supplementary NodePort Service
-(`helm/kagent/kagent-ui-nodeport.yaml`), since kagent's own chart has no
-pinned-nodePort field like this repo's other charts. See
+**AI assistant, in Grafana.** `make up` also wires up an in-Grafana AI
+assistant with **zero external dependencies**. The Grafana chart installs two
+plugins ([`helm/grafana/values.yaml`](helm/grafana/values.yaml)): the official
+`grafana-llm-app` (pointed at the local Ollama via its OpenAI-compatible API,
+so no LLM API key is ever needed) and [**Graft**](https://github.com/vikshana/vikshana-graft-app),
+a community "AI Assistant for Grafana" app that layers a natural-language chat
+UI on top of it, using Grafana's built-in MCP tools to query your dashboards,
+metrics, logs, traces, and alerts. **Ollama** serves the `llama3.1:8b` model
+locally (the heaviest component — CPU-only inference, so expect slow
+responses). Find **Graft** in the Grafana nav at `http://localhost:3000`. See
 [Learn the tools](#learn-the-tools) below for the full guides.
 
 ## Exposing the UIs (NodePort + extraPortMappings)
@@ -142,7 +134,6 @@ kind node publishes those ports on the host via `extraPortMappings`:
 | Karma         | 30081            | http://localhost:8081  | METRICS_MODE=prometheus |
 | Headlamp      | 30466            | http://localhost:4466  | both |
 | Otel-Demo-App | 30080            | http://localhost:8080  | both |
-| kagent        | 30890            | http://localhost:8090  | make ai (optional) |
 
 kind's `extraPortMappings` are static regardless of `METRICS_MODE`, so the
 Prometheus/Karma port mappings simply sit idle (nothing listening) in the
@@ -155,9 +146,7 @@ The node ports in [`helm/grafana/values.yaml`](helm/grafana/values.yaml),
 [`helm/kube-prometheus-stack/values.yaml`](helm/kube-prometheus-stack/values.yaml)
 (Alertmanager's, in both modes),
 [`helm/karma/values.yaml`](helm/karma/values.yaml),
-[`helm/headlamp/values.yaml`](helm/headlamp/values.yaml), and
-(as a standalone Service rather than a chart value)
-[`helm/kagent/kagent-ui-nodeport.yaml`](helm/kagent/kagent-ui-nodeport.yaml)
+[`helm/headlamp/values.yaml`](helm/headlamp/values.yaml)
 must match the `extraPortMappings` in [`kind/cluster.yaml`](kind/cluster.yaml).
 Because those mappings are applied at cluster-creation time, **changing them
 requires `make down && make up`**. Alloy's OTLP receiver ports (4317/4318) stay
@@ -195,8 +184,7 @@ for, and how it's wired in here:
 - [Alloy](docs/solutions/alloy.md) — the collection pipeline (all four signals by default)
 - [Karma](docs/solutions/karma.md) — alert dashboard for Alertmanager (`METRICS_MODE=prometheus` toggle only)
 - [Headlamp](docs/solutions/headlamp.md) — cluster UI
-- [Ollama](docs/solutions/ollama.md) — local LLM inference, serves the `llama3.1:8b` model
-- [kagent](docs/solutions/kagent.md) — Kubernetes-native AI agent framework, OTel-instrumented
+- [Ollama](docs/solutions/ollama.md) — local LLM inference, the model backend for Grafana's Graft AI assistant
 - [Kind & Podman](docs/solutions/kind-and-podman.md) — the local platform
 
 ## Demo application

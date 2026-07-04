@@ -106,15 +106,44 @@ datasources:
       # Let Grafana surface KPS/Prometheus alerts against this Alertmanager.
       handleGrafanaManagedAlerts: false
 
-# kagent's grafana-mcp (see helm/kagent/values.yaml) needs a Grafana
-# service-account token to call the Grafana API. The GrafanaServiceAccount CR
-# in templates/serviceaccount.yaml provisions that token declaratively — the
-# Operator creates the service account, generates the token, and writes it
-# straight into this Secret (key "token", the Operator's own fixed key name).
-# helm/kagent/values.yaml's grafana-mcp config maps that key to the
-# GRAFANA_SERVICE_ACCOUNT_TOKEN_FILE env var mcp-grafana reads, via a mounted
-# volume — see the comment there for why (mcp-grafana's own Secret template
-# expects a differently-named key that the Operator has no way to produce).
-grafanaMcp:
-  serviceAccountName: kagent-grafana-mcp
-  tokenSecretName: kagent-grafana-mcp-token
+# Grafana LLM app plugin (grafana-llm-app), provisioned to talk to this stack's
+# in-cluster Ollama (helm/ollama) instead of a hosted OpenAI. This gives
+# Grafana's built-in LLM features (and the Graft assistant below) a local,
+# key-less model provider — no external API key needed.
+# Docs: https://grafana.com/docs/grafana-cloud/machine-learning/llm/
+#
+# Wiring (see templates/grafana.yaml): the plugin binary is fetched at
+# container start via GF_INSTALL_PLUGINS, and its provider config is delivered
+# through file-based plugin provisioning — the same ConfigMap-mounted
+# mechanism this chart already uses for dashboards and datasources.
+#
+# Provider is "custom" (OpenAI wire format, but no API key required — Ollama
+# exposes an OpenAI-compatible API and ignores auth). The plugin appends "/v1"
+# (its default apiPath) to `url`, hitting Ollama's /v1/chat/completions.
+llm:
+  enabled: true
+  # Bare Service URL for helm/ollama (the plugin adds "/v1").
+  url: http://ollama.observability.svc.cluster.local:11434
+  # The plugin abstracts models into "base"/"large" slots; map both onto the
+  # single model Ollama serves in this demo (see helm/ollama/values.yaml).
+  model: llama3.1:8b
+
+# Graft — a community "AI Assistant for Grafana" app plugin
+# (https://github.com/vikshana/vikshana-graft-app) that layers a natural-language
+# chat UI on top of the `llm` plugin above (it uses grafana-llm-app as its model
+# backend, so keep both enabled together) plus Grafana's MCP tools.
+#
+# Two wrinkles this handles (see templates/grafana.yaml):
+#   - Not in the Grafana catalog, so it's installed from a release-zip URL
+#     appended to GF_INSTALL_PLUGINS as "<url>;<plugin-id>".
+#   - Unsigned, so the id is added to allow_loading_unsigned_plugins in the
+#     Grafana CR config.
+#
+# Version note: upstream's build/publish workflow only fires on legacy `v*`
+# tags, but releases are now tagged `graft-v*` — so v0.2.0 is the newest tag
+# that actually ships a prebuilt zip (the v0.3.0–v0.6.x sources have no
+# downloadable artifact). Bump pluginUrl if/when upstream publishes newer
+# builds again.
+graft:
+  enabled: true
+  pluginUrl: https://github.com/vikshana/vikshana-graft-app/releases/download/v0.2.0/vikshana-graft-app-v0.2.0.zip

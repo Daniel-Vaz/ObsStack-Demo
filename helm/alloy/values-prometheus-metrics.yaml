@@ -7,8 +7,8 @@
 # from values.yaml deliberately left out: in this legacy toggle, kube-
 # prometheus-stack's own Prometheus (values-prometheus-metrics.yaml in that
 # chart) owns metrics and rule evaluation instead. Kept in lockstep with
-# values.yaml's OTLP-logs-to-Loki bridge (kagent) below, since only metrics
-# differs between the two modes.
+# values.yaml's OTLP-logs-to-Loki bridge below, since only metrics differs
+# between the two modes.
 
 controller:
   type: daemonset
@@ -153,8 +153,8 @@ alloy:
 
       // ========================================================================
       // OTLP LOGS  ->  Loki
-      // kagent (helm/kagent/values.yaml) emits its own logs over OTLP rather
-      // than only stdout, using the same receiver as traces above. Promote
+      // Any workload that emits logs over OTLP (rather than only stdout) lands
+      // here, using the same receiver as traces above. Promote
       // service.name/service.namespace resource attributes to Loki labels
       // (otelcol.exporter.loki needs the "loki.resource.labels" hint --
       // it doesn't map OTLP attributes to labels on its own) and forward into

@@ -13,8 +13,9 @@ tempo:
   # Tempo datasource and the Traces Drilldown app use this for the metrics API.
   streamOverHttpEnabled: true
   # Expose Tempo's own MCP server (Streamable HTTP, at /api/mcp on the query
-  # port 3200) so an AI agent can query traces directly — today ObsAgent
-  # (helm/kagent/obs-agent.yaml) has no tool that reaches Tempo at all.
+  # port 3200) so an AI agent could query traces directly. Not wired into
+  # Grafana's Graft assistant today (which uses Grafana's in-process MCP), but
+  # left enabled for any MCP-capable client that wants trace access.
   queryFrontend:
     mcp_server:
       enabled: true

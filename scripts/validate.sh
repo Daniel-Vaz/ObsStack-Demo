@@ -25,7 +25,7 @@ else
 fi
 
 info "Checking helm releases are deployed..."
-releases=(kube-prometheus-stack mimir loki tempo pyroscope grafana alloy headlamp ollama kagent-crds kagent)
+releases=(kube-prometheus-stack mimir loki tempo pyroscope grafana alloy headlamp ollama)
 [[ "$METRICS_MODE" == "prometheus" ]] && releases+=(karma)
 for r in "${releases[@]}"; do
   status="$(helm status "$r" -n "$NAMESPACE" -o json 2>/dev/null | grep -o '"status":"[^"]*"' | head -1)"

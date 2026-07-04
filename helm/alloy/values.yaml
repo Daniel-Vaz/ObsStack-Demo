@@ -6,7 +6,7 @@
 #   Metrics : ServiceMonitors/PodMonitors (Operator CRDs), scraped directly -> Mimir
 #             PrometheusRules (Operator CRDs), synced                       -> Mimir's ruler
 #   Logs    : all pod stdout/stderr (via the Kubernetes API)  -> Loki
-#             + OTLP in on :4317/:4318 (e.g. kagent)          -> Loki
+#             + OTLP logs in on :4317/:4318                    -> Loki
 #   Traces  : OTLP in on :4317 (gRPC) / :4318 (HTTP)          -> Tempo
 #   Profiles: pods annotated  pyroscope.io/scrape: "true"     -> Pyroscope
 #
@@ -193,8 +193,8 @@ alloy:
 
       // ========================================================================
       // OTLP LOGS  ->  Loki
-      // kagent (helm/kagent/values.yaml) emits its own logs over OTLP rather
-      // than only stdout, using the same receiver as traces above. Promote
+      // Any workload that emits logs over OTLP (rather than only stdout) lands
+      // here, using the same receiver as traces above. Promote
       // service.name/service.namespace resource attributes to Loki labels
       // (otelcol.exporter.loki needs the "loki.resource.labels" hint --
       // it doesn't map OTLP attributes to labels on its own) and forward into

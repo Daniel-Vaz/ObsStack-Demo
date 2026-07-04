@@ -1,12 +1,13 @@
 # Ollama — local LLM inference server (https://github.com/otwld/ollama-helm)
 #
-# Serves the llama3.1:8b model over Ollama's native REST API on :11434. kagent
-# (helm/kagent/values.yaml) uses it as its default model provider, so this
-# demo needs no external LLM API key.
+# Serves the llama3.1:8b model over Ollama's native REST API on :11434.
+# Grafana's grafana-llm-app plugin (and the Graft assistant built on it — see
+# helm/grafana/values.yaml) use it as their model provider via Ollama's
+# OpenAI-compatible /v1 API, so this demo needs no external LLM API key.
 #
 # Lightweight/demo trade-offs:
 #   - CPU inference only (no GPU) — fine for an occasional demo query from
-#     kagent's k8s-agent, not for load testing.
+#     Graft, not for load testing (expect ~30s+ per response).
 #   - No PersistentVolume: the model is pulled into the container filesystem
 #     by the postStart hook below on every pod start (~4.7GB download). A PVC
 #     wouldn't survive `make down` anyway on this kind/Podman setup (the
@@ -14,7 +15,7 @@
 #     container), so we accept the re-pull cost instead of adding a PVC that
 #     would only help across in-cluster pod restarts. Flip
 #     `persistentVolume.enabled: true` (+ `.size`) if you want that.
-#   - No web UI to expose — kagent reaches Ollama cluster-internally at
+#   - No web UI to expose — Grafana reaches Ollama cluster-internally at
 #     ollama.observability.svc.cluster.local:11434.
 
 image:
@@ -29,7 +30,7 @@ ollama:
     # `ollama` target, which uses a longer OLLAMA_TIMEOUT to cover it.
     pull:
       - llama3.1:8b
-    # Also load it into memory at startup so the first kagent request isn't
+    # Also load it into memory at startup so the first Graft request isn't
     # additionally slowed by a cold model load.
     run:
       - llama3.1:8b
