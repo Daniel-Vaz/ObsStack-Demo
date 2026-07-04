@@ -1,0 +1,31 @@
+# metrics-server — kubelet resource metrics (https://github.com/kubernetes-sigs/metrics-server)
+#
+# Serves the metrics.k8s.io API (`kubectl top nodes`/`kubectl top pods`, HPA)
+# by scraping each kubelet's Summary API. This is a different metrics path
+# from kube-state-metrics/node-exporter (cluster/OS-level metrics scraped into
+# Mimir): metrics-server is the live, in-cluster API the Kubernetes control
+# plane itself consumes, and it's also exposed here as a Prometheus target so
+# it shows up in Mimir like everything else.
+#
+# The chart's own `apiService.insecureSkipTLSVerify` (default: true) only
+# covers the apiserver -> metrics-server leg. The metrics-server -> kubelet
+# leg still verifies the kubelet's serving cert by default, which fails on
+# kind: kind's self-signed kubelet certs aren't issued for a SAN matching the
+# node's IP ("x509: cannot validate certificate for <node-ip> because it
+# doesn't contain any IP SANs"). --kubelet-insecure-tls skips that check —
+# standard practice for kind/minikube-style clusters, not for production.
+args:
+  - --kubelet-insecure-tls
+
+metrics:
+  # Also required for the built-in ServiceMonitor below: it's gated on both
+  # `metrics.enabled` and `serviceMonitor.enabled`, and it adds
+  # --authorization-always-allow-paths=/metrics so the scraper (Alloy, or
+  # Prometheus in METRICS_MODE=prometheus) can hit /metrics without a token.
+  enabled: true
+
+serviceMonitor:
+  enabled: true
+
+resources:
+  requests: { cpu: 100m, memory: 200Mi }

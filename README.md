@@ -71,6 +71,7 @@ locally controlled values files under [`helm/`](helm/).
 | Component | Chart | Version | Role | Storage |
 |-----------|-------|---------|------|---------|
 | kube-prometheus-stack | `prometheus-community/kube-prometheus-stack` | 87.5.1 | Prometheus Operator + kube-state-metrics + node-exporter + Alertmanager (Grafana & Windows exporter disabled) | ephemeral |
+| metrics-server | `metrics-server/metrics-server` | 3.13.1 | kubelet resource metrics (`kubectl top`/HPA), scraped via its built-in ServiceMonitor | — |
 | Mimir     | `grafana/mimir-distributed` | 6.1.0 | metrics storage; ruler evaluates alerting rules | bundled MinIO |
 | Loki      | `grafana/loki`   | 7.0.0  | logs storage (SingleBinary) | filesystem |
 | Tempo     | `grafana-community/tempo`  | 2.2.3 | traces storage (single binary) | filesystem |

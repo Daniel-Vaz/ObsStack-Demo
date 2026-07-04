@@ -25,12 +25,20 @@ else
 fi
 
 info "Checking helm releases are deployed..."
-releases=(kube-prometheus-stack mimir loki tempo pyroscope grafana alloy headlamp ollama)
+releases=(kube-prometheus-stack metrics-server mimir loki tempo pyroscope grafana alloy headlamp ollama)
 [[ "$METRICS_MODE" == "prometheus" ]] && releases+=(karma)
 for r in "${releases[@]}"; do
   status="$(helm status "$r" -n "$NAMESPACE" -o json 2>/dev/null | grep -o '"status":"[^"]*"' | head -1)"
   if [[ "$status" == *deployed* ]]; then pass "release $r deployed"; else warn "release $r not deployed ($status)"; fi
 done
+
+info "Checking metrics-server is serving the metrics.k8s.io API..."
+if kubectl top nodes >/dev/null 2>&1; then
+  pass "metrics-server API healthy (kubectl top nodes)"
+else
+  fail "metrics-server API not responding to kubectl top nodes"
+  FAILS=$((FAILS+1))
+fi
 
 info "Checking Grafana datasource health..."
 grafana_datasource_health() {

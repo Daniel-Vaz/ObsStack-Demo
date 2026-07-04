@@ -74,6 +74,7 @@ ALLOY_VERSION          := 1.10.0
 KPS_VERSION            := 87.5.1
 HEADLAMP_VERSION       := 0.43.0
 OLLAMA_VERSION         := 1.65.0
+METRICS_SERVER_VERSION := 3.13.1
 
 # ollama's postStart hook pulls the llama3.2:3b model (~2GB) on first start, and
 # Kubernetes doesn't mark the container "Running" (so readiness, and thus
@@ -138,7 +139,8 @@ repos: ## Add and update the Grafana + Prometheus + Ollama helm repos
 	@helm repo add prometheus-community https://prometheus-community.github.io/helm-charts >/dev/null
 	@helm repo add headlamp https://kubernetes-sigs.github.io/headlamp/ >/dev/null
 	@helm repo add ollama-helm https://otwld.github.io/ollama-helm/ >/dev/null
-	@helm repo update grafana grafana-community prometheus-community headlamp ollama-helm >/dev/null
+	@helm repo add metrics-server https://kubernetes-sigs.github.io/metrics-server/ >/dev/null
+	@helm repo update grafana grafana-community prometheus-community headlamp ollama-helm metrics-server >/dev/null
 	@echo "Helm repos up to date."
 
 .PHONY: namespace
@@ -146,10 +148,13 @@ namespace: ## Ensure the target namespace exists
 	@kubectl get namespace $(NAMESPACE) >/dev/null 2>&1 || kubectl create namespace $(NAMESPACE)
 
 # ---- Individual component deploys --------------------------------------------
-.PHONY: kube-prometheus-stack mimir loki tempo pyroscope grafana-operator grafana alloy headlamp karma ollama
+.PHONY: kube-prometheus-stack mimir loki tempo pyroscope grafana-operator grafana alloy headlamp karma ollama metrics-server
 
 kube-prometheus-stack: repos namespace ## Deploy kube-prometheus-stack (Alertmanager, operator, KSM, node-exporter; + Prometheus in METRICS_MODE=prometheus)
 	$(call helm_install,kube-prometheus-stack,prometheus-community/kube-prometheus-stack,$(KPS_VERSION),$(KPS_EXTRA_VALUES))
+
+metrics-server: repos namespace ## Deploy metrics-server (kubelet resource metrics for `kubectl top`/HPA; scraped via its built-in ServiceMonitor)
+	$(call helm_install,metrics-server,metrics-server/metrics-server,$(METRICS_SERVER_VERSION))
 
 mimir: repos namespace ## Deploy Mimir (metrics)
 	$(call helm_install,mimir,grafana/mimir-distributed,$(MIMIR_VERSION),$(MIMIR_EXTRA_VALUES))
@@ -241,7 +246,7 @@ backends: mimir loki tempo pyroscope ## Deploy the four LGTM backends
 # Alertmanager that Karma / Mimir's ruler fires to.
 # Karma is only deployed in the METRICS_MODE=prometheus mode — in the default
 # alloy mode, Grafana Alerting (via the Mimir datasource) covers that role.
-stack: kube-prometheus-stack backends grafana headlamp $(if $(filter prometheus,$(METRICS_MODE)),karma,) ## Deploy Prometheus-operator stack + backends + Grafana + Headlamp (+ Karma in METRICS_MODE=prometheus)
+stack: kube-prometheus-stack metrics-server backends grafana headlamp $(if $(filter prometheus,$(METRICS_MODE)),karma,) ## Deploy Prometheus-operator stack + metrics-server + backends + Grafana + Headlamp (+ Karma in METRICS_MODE=prometheus)
 
 .PHONY: up
 # Ollama is part of the default flow because Grafana's Graft AI assistant (and
@@ -308,7 +313,7 @@ logs-alloy: ## Tail Alloy logs
 # ---- Teardown ----------------------------------------------------------------
 .PHONY: clean
 clean: ## Uninstall all helm releases (keep the cluster)
-	-@for r in ollama karma headlamp alloy grafana grafana-operator pyroscope tempo loki mimir kube-prometheus-stack; do \
+	-@for r in ollama karma headlamp alloy grafana grafana-operator pyroscope tempo loki mimir metrics-server kube-prometheus-stack; do \
 		helm uninstall $$r -n $(NAMESPACE) 2>/dev/null || true; \
 	done
 	@echo "Releases removed. (Prometheus-operator + Grafana Operator CRDs are left in place; kind delete removes them.)"
