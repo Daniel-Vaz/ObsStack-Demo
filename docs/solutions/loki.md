@@ -49,8 +49,8 @@ talks to Loki directly.
   a set of LogQL alerts in
   [`apps/otel-demo/k8s/loki-rules.yaml`](../../apps/otel-demo/k8s/loki-rules.yaml)
   (e.g. "alert when the otel-demo error-log rate is high"). Turn up *simulated
-  errors* in the demo UI to watch them fire — they appear in
-  [Karma](./karma.md) next to the metric-based alerts.
+  errors* in the demo UI to watch them fire — they show up in **Grafana
+  Alerting** next to the metric-based alerts from Mimir's ruler.
 
 ## Try it
 

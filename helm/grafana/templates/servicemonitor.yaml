@@ -1,5 +1,5 @@
 # Emit a ServiceMonitor so the metrics collector (Alloy by default, or
-# kube-prometheus-stack's Prometheus in the METRICS_MODE=prometheus toggle)
+# kube-prometheus-stack's Prometheus in the METRICS_MODE=prometheus mode)
 # scrapes Grafana (Grafana serves /metrics on its HTTP port).
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor

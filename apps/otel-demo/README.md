@@ -55,7 +55,7 @@ var as a baseline for traffic that doesn't carry the param (e.g. the loadgen).
 | Signal   | How the app emits it | How the stack collects it |
 |----------|----------------------|---------------------------|
 | Traces   | OTel SDK, OTLP/gRPC to `OTEL_EXPORTER_OTLP_ENDPOINT` (Alloy) | Alloy `otelcol.receiver.otlp` → Tempo |
-| Metrics  | OTel SDK + Prometheus exporter on `/metrics` (RED via `otelhttp` + `demo_orders` / `demo_order_errors` / `demo_payment_failures` counters) | `PodMonitor` → kube-prometheus-stack scrape → remote_write → Mimir |
+| Metrics  | OTel SDK + Prometheus exporter on `/metrics` (RED via `otelhttp` + `demo_orders` / `demo_order_errors` / `demo_payment_failures` counters) | `PodMonitor` → Alloy scrape → remote_write → Mimir |
 | Logs     | `slog` JSON to stdout, including a **`trace_id`** field | Alloy pod-log tailing → Loki (promoted to structured metadata; Grafana links `trace_id` → Tempo) |
 | Profiles | Go `net/http/pprof` on the same port; pod annotated `pyroscope.io/scrape: "true"` | Alloy `pyroscope.scrape` → Pyroscope |
 
@@ -72,9 +72,9 @@ Dial the web UI's **simulated errors** slider above `0%` (or set `FAIL_RATE` on
 the payment deployment) and the demo starts failing that fraction of orders,
 lighting up every signal — and the two example alerting paths this repo ships:
 
-- **Metric-based — Prometheus / operator.** `k8s/prometheusrules.yaml` is a
-  `PrometheusRule` picked up by kube-prometheus-stack in every namespace. It
-  alerts on the failed-order ratio (`demo_order_errors_total` /
+- **Metric-based — Mimir ruler.** `k8s/prometheusrules.yaml` is a
+  `PrometheusRule` that Alloy syncs into **Mimir's ruler**, which evaluates it.
+  It alerts on the failed-order ratio (`demo_order_errors_total` /
   `demo_orders_total`), on `demo_payment_failures_total`, and on 5xx
   `http_server_request_duration_seconds_count`.
 - **Log-based — Loki ruler.** `k8s/loki-rules.yaml` is a `ConfigMap` of LogQL
@@ -83,8 +83,9 @@ lighting up every signal — and the two example alerting paths this repo ships:
   log lines and on `payment declined` messages.
 
 Both fire into the **same Alertmanager**, so metric and log alerts land together
-and show up in **Karma** (`http://localhost:8081`). Query the live Loki rules
-with `kubectl exec … -- wget -qO- localhost:3100/loki/api/v1/rules`.
+and show up in **Grafana Alerting** (and the Alertmanager UI at
+`http://localhost:9093`). Query the live Loki rules with
+`kubectl exec … -- wget -qO- localhost:3100/loki/api/v1/rules`.
 
 ## Layout
 

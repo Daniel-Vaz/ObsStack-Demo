@@ -25,17 +25,18 @@ HELM_TIMEOUT ?= 10m
 #            kube-state-metrics, node-exporter, the Operator, and Alertmanager —
 #            no Prometheus server. Karma is not deployed: Grafana Alerting (via
 #            the Mimir datasource) covers that role instead.
-# prometheus: the original setup — KPS's own Prometheus scrapes and
-#            evaluates rules, firing to its Alertmanager; Karma is deployed as
-#            Alertmanager's dashboard.
+# prometheus: an opt-in mode for specific testing scenarios — KPS's own
+#            Prometheus scrapes and evaluates rules, firing to its Alertmanager,
+#            and Karma is deployed as Alertmanager's dashboard. See
+#            docs/metrics-modes.md.
 # Toggle with: make up METRICS_MODE=prometheus
 METRICS_MODE ?= alloy
 ifeq ($(filter $(METRICS_MODE),alloy prometheus),)
 $(error METRICS_MODE must be 'alloy' or 'prometheus', got '$(METRICS_MODE)')
 endif
 
-# Per-chart overlay applied only in METRICS_MODE=prometheus, restoring today's
-# as-is behavior on top of each chart's alloy-mode-default values.yaml.
+# Per-chart overlay applied only in METRICS_MODE=prometheus, layered on top of
+# each chart's default (alloy-mode) values.yaml.
 KPS_EXTRA_VALUES     := $(if $(filter prometheus,$(METRICS_MODE)),--values $(HELM_DIR)/kube-prometheus-stack/values-prometheus-metrics.yaml,)
 ALLOY_EXTRA_VALUES   := $(if $(filter prometheus,$(METRICS_MODE)),--values $(HELM_DIR)/alloy/values-prometheus-metrics.yaml,)
 MIMIR_EXTRA_VALUES   := $(if $(filter prometheus,$(METRICS_MODE)),--values $(HELM_DIR)/mimir/values-prometheus-metrics.yaml,)
@@ -61,10 +62,9 @@ DEMO_LOADGEN   ?= false
 export KIND_EXPERIMENTAL_PROVIDER := podman
 
 # Pinned chart versions (see README for how these were chosen).
-# Tempo ships from the grafana-community repo; Grafana itself is now a
-# first-party chart (helm/grafana) driven by the Grafana Operator
-# (grafana/grafana-operator, from the grafana repo) via CRDs — see
-# docs/architecture.md.
+# Tempo ships from the grafana-community repo; Grafana is a first-party chart
+# (helm/grafana) driven by the Grafana Operator (grafana/grafana-operator, from
+# the grafana repo) via CRDs — see docs/architecture.md.
 MIMIR_VERSION          := 6.1.0
 LOKI_VERSION           := 7.0.0
 TEMPO_VERSION          := 2.2.3
@@ -239,8 +239,8 @@ backends: mimir loki tempo pyroscope ## Deploy the four LGTM backends
 # (ServiceMonitor, PodMonitor, PrometheusRule, ...) that every other chart's
 # values (and Alloy, in METRICS_MODE=alloy) now reference, plus the
 # Alertmanager that Karma / Mimir's ruler fires to.
-# Karma is only deployed in the legacy METRICS_MODE=prometheus toggle — in the
-# default alloy mode, Grafana Alerting (via the Mimir datasource) covers that role.
+# Karma is only deployed in the METRICS_MODE=prometheus mode — in the default
+# alloy mode, Grafana Alerting (via the Mimir datasource) covers that role.
 stack: kube-prometheus-stack backends grafana headlamp $(if $(filter prometheus,$(METRICS_MODE)),karma,) ## Deploy Prometheus-operator stack + backends + Grafana + Headlamp (+ Karma in METRICS_MODE=prometheus)
 
 .PHONY: up

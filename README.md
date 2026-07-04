@@ -1,35 +1,26 @@
 # Observability Demo
 
 A minimal, reproducible demo of the full Grafana observability stack running on a
-local [kind](https://kind.sigs.k8s.io/) cluster. Metrics collection has **two
-toggleable modes** (`METRICS_MODE`, default `alloy`):
+local [kind](https://kind.sigs.k8s.io/) cluster. A single **Grafana Alloy**
+collector gathers **all four signals** — metrics, logs, traces, and profiles —
+and ships them to the storage backends: **Mimir** (metrics), **Loki** (logs),
+**Tempo** (traces), and **Pyroscope** (profiles). Everything is read back through
+**Grafana** (the **L**oki / **G**rafana / **T**empo / **M**imir stack, plus
+Pyroscope), and **Headlamp** provides a web UI for browsing the cluster itself.
 
-- **`alloy` (default)**: **Grafana Alloy** collects *all four signals* — it reads
-  the Prometheus-Operator CRDs directly, scrapes **metrics** and remote-writes
-  them to **Mimir**, and syncs alerting rules into Mimir's **ruler**, which
-  evaluates them against Alertmanager. **kube-prometheus-stack** deploys only
-  the Operator, kube-state-metrics, node-exporter, and Alertmanager (no
-  Prometheus server), and **Karma is not deployed** — Grafana Alerting (via the
-  Mimir datasource) covers that role instead.
-- **`prometheus`** (`make up METRICS_MODE=prometheus`): the original setup —
-  **kube-prometheus-stack**'s own Prometheus scrapes metrics via ServiceMonitors,
-  evaluates alerting rules itself, and remote-writes to Mimir; **Karma** is
-  deployed as Alertmanager's dashboard.
+Alloy reads the Prometheus-Operator CRDs directly to scrape metrics and
+remote-write them to Mimir, and syncs alerting rules into Mimir's **ruler**,
+which evaluates them against **Alertmanager**. **kube-prometheus-stack** provides
+the Operator, kube-state-metrics, node-exporter, and Alertmanager;
+**Grafana Alerting** shows what's firing.
 
-In both modes, Alloy also collects **logs** and **traces** (always) and
-**profiles** (always), shipping them to Loki / Tempo / Pyroscope. Everything is
-read back through **Grafana** (**L**oki / **G**rafana / **T**empo / **M**imir,
-plus Pyroscope). **Headlamp** provides a web UI for browsing the cluster itself.
 The web UIs are exposed as NodePort services and published on the host via kind
 `extraPortMappings`, so they're reachable directly on `localhost` (e.g. Grafana
 at `http://localhost:3000`, Headlamp at `http://localhost:4466`).
 
-See [architecture.md](docs/architecture.md#metrics-collection--alerting-two-modes)
-for the full rationale behind both modes.
-
 >[!NOTE]
 >![Grafana Kubernetes / Compute Resources / Cluster dashboard showing CPU and memory utilisation panels by namespace](docs/images/grafana-dashboard-example.png)
->*Grafana at `http://localhost:3000`, rendering a stock Kubernetes dashboard from metrics scraped by the collector and stored in Mimir — one of the many views this stack lights up.*
+>*Grafana at `http://localhost:3000`, rendering a stock Kubernetes dashboard from metrics scraped by Alloy and stored in Mimir — one of the many views this stack lights up.*
 
 ```mermaid
 flowchart TB
@@ -54,14 +45,6 @@ flowchart TB
     grafana --> browser["you (browser)"]
 ```
 
-*Default (`METRICS_MODE=alloy`) architecture. In the `METRICS_MODE=prometheus`
-toggle, Prometheus (deployed by kube-prometheus-stack) replaces Alloy for the
-metrics/rules path, Mimir's ruler is disabled, and Karma is deployed to read
-Alertmanager directly — see
-[architecture.md](docs/architecture.md#metrics-collection--alerting-two-modes)
-for the full breakdown, and [docs/solutions/README.md](docs/solutions/README.md#how-they-fit-together)
-for a side-by-side diagram of both modes.*
-
 ## Prerequisites
 
 `make`, `podman`, `kind`, `kubectl`, `helm`, and `python3` on your PATH.
@@ -73,35 +56,30 @@ This setup uses **Podman** as the container runtime. The Makefile exports
 ## Quick start
 
 ```bash
-make up                                 # create cluster + deploy stack + Alloy + Ollama + validate (METRICS_MODE=alloy, default)
-make up METRICS_MODE=prometheus         # ...or the original as-is setup (KPS Prometheus + Karma)
-make down                               # delete the cluster
+make up      # create cluster + deploy the stack + Alloy + Ollama + validate + demo app
+make down    # delete the cluster
 ```
 
 >[!TIP]
->Run `make help` to see every target. `METRICS_MODE` also applies to `make stack`,
->`make kube-prometheus-stack`/`alloy`/`mimir`/`grafana`, and `make validate`.
+>Run `make help` to see every target.
 
 ## What gets deployed
 
 Everything lands in the `observability` namespace and is installed via Helm with
-locally controlled values files under [`helm/`](helm/). Rows marked
-**(METRICS_MODE=prometheus)** are only deployed in that toggle; everything else
-is deployed in both metrics modes by `make up`.
+locally controlled values files under [`helm/`](helm/).
 
-| Component | Chart | Version | Mode | Storage |
+| Component | Chart | Version | Role | Storage |
 |-----------|-------|---------|------|---------|
-| kube-prometheus-stack | `prometheus-community/kube-prometheus-stack` | 87.5.1 | operator + kube-state-metrics + node-exporter + Alertmanager (Grafana & Windows exporter disabled); + Prometheus itself in **METRICS_MODE=prometheus** | ephemeral (2h local retention, when Prometheus runs) |
-| Mimir     | `grafana/mimir-distributed` | 6.1.0 | minimal (1 replica/component, no zones/Kafka); ruler enabled by default | bundled MinIO |
-| Loki      | `grafana/loki`   | 7.0.0  | SingleBinary (monolithic) | filesystem |
-| Tempo     | `grafana-community/tempo`  | 2.2.3 | single binary (monolithic) | filesystem |
-| Pyroscope | `grafana/pyroscope` | 2.1.0 | monolithic (`all` target) | filesystem |
+| kube-prometheus-stack | `prometheus-community/kube-prometheus-stack` | 87.5.1 | Prometheus Operator + kube-state-metrics + node-exporter + Alertmanager (Grafana & Windows exporter disabled) | ephemeral |
+| Mimir     | `grafana/mimir-distributed` | 6.1.0 | metrics storage; ruler evaluates alerting rules | bundled MinIO |
+| Loki      | `grafana/loki`   | 7.0.0  | logs storage (SingleBinary) | filesystem |
+| Tempo     | `grafana-community/tempo`  | 2.2.3 | traces storage (single binary) | filesystem |
+| Pyroscope | `grafana/pyroscope` | 2.1.0 | profiles storage (monolithic `all` target) | filesystem |
 | Grafana Operator | `grafana/grafana-operator` | 5.24.0 | reconciles `helm/grafana`'s CRDs into a running Grafana | — |
-| Grafana   | `helm/grafana` (first-party CRs: `Grafana`, `GrafanaDatasource`) | operator-managed | provisioned datasources + KPS dashboards via k8s-sidecar; installs the `grafana-llm-app` + Graft AI plugins (backed by Ollama) | ephemeral |
-| Alloy     | `grafana/alloy`  | 1.10.0 | DaemonSet collector — logs/traces/profiles, + metrics & rules by default (**METRICS_MODE=alloy**) | — |
+| Grafana   | `helm/grafana` (first-party CRs: `Grafana`, `GrafanaDatasource`) | operator-managed | provisioned datasources + Kubernetes dashboards; installs the `grafana-llm-app` + Graft AI plugins (backed by Ollama) | ephemeral |
+| Alloy     | `grafana/alloy`  | 1.10.0 | DaemonSet collector for metrics, logs, traces, profiles, and alerting rules | — |
 | Headlamp  | `headlamp/headlamp` | 0.43.0 | in-cluster dashboard (cluster-admin, no-login demo mode) | — |
-| Karma     | `helm/karma` (first-party) | v0.131 | **(METRICS_MODE=prometheus)** alert dashboard over Alertmanager (reads all alerts) | — |
-| Ollama    | `ollama-helm/ollama` | 1.65.0 | CPU inference, serves the `llama3.2:3b` model — model backend for Grafana's Graft AI assistant | none (re-pulled on pod start) |
+| Ollama    | `ollama-helm/ollama` | 1.65.0 | CPU inference serving `llama3.2:3b` — model backend for Grafana's Graft AI assistant | none (re-pulled on pod start) |
 
 Alongside the stack, `make up` also builds and deploys the **OpenTelemetry demo
 app** (`otel-demo-app`) into its own `otel-demo` namespace — via plain
@@ -122,31 +100,21 @@ responses). Find **Graft** in the Grafana nav at `http://localhost:3000`. See
 
 ## Exposing the UIs (NodePort + extraPortMappings)
 
-The web UIs are `type: NodePort` services on fixed node ports, and the 
+The web UIs are `type: NodePort` services on fixed node ports, and the
 kind node publishes those ports on the host via `extraPortMappings`:
 
-| UI            | Service nodePort | Host URL | Mode |
-|---------------|------------------|----------|------|
-| Grafana       | 30000            | http://localhost:3000  | both |
-| Alloy         | 30345            | http://localhost:12345 | both |
-| Alertmanager  | 30093            | http://localhost:9093  | both |
-| Prometheus    | 30090            | http://localhost:9090  | METRICS_MODE=prometheus |
-| Karma         | 30081            | http://localhost:8081  | METRICS_MODE=prometheus |
-| Headlamp      | 30466            | http://localhost:4466  | both |
-| Otel-Demo-App | 30080            | http://localhost:8080  | both |
-
-kind's `extraPortMappings` are static regardless of `METRICS_MODE`, so the
-Prometheus/Karma port mappings simply sit idle (nothing listening) in the
-default `alloy` mode — no `make down && make up` needed to switch modes.
+| UI            | Service nodePort | Host URL |
+|---------------|------------------|----------|
+| Grafana       | 30000            | http://localhost:3000  |
+| Alloy         | 30345            | http://localhost:12345 |
+| Alertmanager  | 30093            | http://localhost:9093  |
+| Headlamp      | 30466            | http://localhost:4466  |
+| Otel-Demo-App | 30080            | http://localhost:8080  |
 
 The node ports in [`helm/grafana/values.yaml`](helm/grafana/values.yaml),
 [`helm/alloy/values.yaml`](helm/alloy/values.yaml),
-[`helm/kube-prometheus-stack/values-prometheus-metrics.yaml`](helm/kube-prometheus-stack/values-prometheus-metrics.yaml)
-(Prometheus's own nodePort only exists in that overlay),
 [`helm/kube-prometheus-stack/values.yaml`](helm/kube-prometheus-stack/values.yaml)
-(Alertmanager's, in both modes),
-[`helm/karma/values.yaml`](helm/karma/values.yaml),
-[`helm/headlamp/values.yaml`](helm/headlamp/values.yaml)
+(Alertmanager's), and [`helm/headlamp/values.yaml`](helm/headlamp/values.yaml)
 must match the `extraPortMappings` in [`kind/cluster.yaml`](kind/cluster.yaml).
 Because those mappings are applied at cluster-creation time, **changing them
 requires `make down && make up`**. Alloy's OTLP receiver ports (4317/4318) stay
@@ -167,6 +135,7 @@ cluster-internal — demo apps push to them via the in-cluster Service DNS.
 └── docs/
     ├── architecture.md            # deeper design notes (the "why")
     ├── otel-instrumentation.md    # how the demo app is OTel-instrumented
+    ├── metrics-modes.md           # an alternate metrics-collection mode for testing
     └── solutions/                 # per-tool intro guides (start here to learn each tool)
 ```
 
@@ -176,13 +145,12 @@ New to the Grafana observability stack? [`docs/solutions/`](docs/solutions/) has
 short, beginner-friendly guide to each tool in this demo — what it is, what it's
 for, and how it's wired in here:
 
-- [Kube-Prometheus-Stack](docs/solutions/kube-prometheus-stack.md) — operator, exporters, Alertmanager (+ Prometheus itself in the `METRICS_MODE=prometheus` toggle)
+- [Kube-Prometheus-Stack](docs/solutions/kube-prometheus-stack.md) — operator, exporters, Alertmanager
 - [Mimir](docs/solutions/mimir.md) — long-term metrics storage + rule evaluation (ruler)
 - [Loki](docs/solutions/loki.md) — logs storage
 - [Tempo](docs/solutions/tempo.md) — traces storage
 - [Pyroscope](docs/solutions/pyroscope.md) — continuous profiling
-- [Alloy](docs/solutions/alloy.md) — the collection pipeline (all four signals by default)
-- [Karma](docs/solutions/karma.md) — alert dashboard for Alertmanager (`METRICS_MODE=prometheus` toggle only)
+- [Alloy](docs/solutions/alloy.md) — the collection pipeline (all four signals)
 - [Headlamp](docs/solutions/headlamp.md) — cluster UI
 - [Ollama](docs/solutions/ollama.md) — local LLM inference, the model backend for Grafana's Graft AI assistant
 - [Kind & Podman](docs/solutions/kind-and-podman.md) — the local platform
@@ -208,7 +176,7 @@ with `DEMO_LOADGEN=true`.
 | Signal   | App emits | Stack collects |
 |----------|-----------|----------------|
 | Traces   | OTLP/gRPC → Alloy | Alloy → Tempo |
-| Metrics  | `/metrics` (OTel Prometheus exporter) + `PodMonitor` | Alloy (default) or Prometheus (`METRICS_MODE=prometheus`) → remote_write → Mimir |
+| Metrics  | `/metrics` (OTel Prometheus exporter) + `PodMonitor` | Alloy → remote_write → Mimir |
 | Logs     | `slog` JSON to stdout with a `trace_id` field | Alloy pod-log tail → Loki (auto-linked to traces) |
 | Profiles | Go `pprof` + `pyroscope.io/scrape` annotation | Alloy → Pyroscope |
 
@@ -239,3 +207,10 @@ then open Grafana (`http://localhost:3000`, admin/admin) and:
 
 See [`apps/otel-demo/README.md`](apps/otel-demo/README.md) for the instrumentation
 walkthrough.
+
+## Advanced
+
+The demo collects metrics with Alloy by default. For an alternate
+metrics-collection mode intended for specific testing scenarios — running
+kube-prometheus-stack's own Prometheus server in the loop — see
+[docs/metrics-modes.md](docs/metrics-modes.md).

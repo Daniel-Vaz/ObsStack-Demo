@@ -35,13 +35,9 @@ like Unix pipes for telemetry.
 
 ## How we use it in this demo
 
-By default (`METRICS_MODE=alloy`), Alloy owns **all four signals**, including
-metrics — logs, traces, profiles, *and* metrics + alerting rules. (Set
-`METRICS_MODE=prometheus` to hand metrics back to
-[kube-prometheus-stack's Prometheus](./kube-prometheus-stack.md) instead, the
-original setup — see [architecture.md](../architecture.md#metrics-collection--alerting-two-modes).)
-It runs as a **DaemonSet** — one pod per node — so it's always local to the
-workloads it collects from.
+Alloy owns **all four signals** — logs, traces, profiles, *and* metrics +
+alerting rules. It runs as a **DaemonSet** — one pod per node — so it's always
+local to the workloads it collects from.
 
 | Signal | Alloy pipeline | Sends to |
 |--------|----------------|----------|

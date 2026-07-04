@@ -1,6 +1,6 @@
 # kube-prometheus-stack — Alertmanager, the Prometheus Operator,
 # kube-state-metrics and node-exporter. (+ Prometheus itself, in the
-# METRICS_MODE=prometheus toggle — see values-prometheus-metrics.yaml.)
+# METRICS_MODE=prometheus mode — see values-prometheus-metrics.yaml.)
 #
 # Default (METRICS_MODE=alloy): Prometheus itself is NOT deployed. The
 # Operator stays only to own the CRDs (ServiceMonitor/PodMonitor/PrometheusRule)
@@ -9,12 +9,12 @@
 # remote-writes to Mimir, and syncs PrometheusRules into Mimir's ruler, which
 # evaluates them and fires to the Alertmanager deployed here.
 #
-# Toggle METRICS_MODE=prometheus restores the original as-is architecture:
-# Prometheus itself scrapes and evaluates rules — see
-# values-prometheus-metrics.yaml.
+# METRICS_MODE=prometheus is an opt-in mode for specific testing scenarios,
+# where Prometheus itself scrapes and evaluates rules — see
+# values-prometheus-metrics.yaml and docs/metrics-modes.md.
 #
 # Grafana and the Windows exporter are intentionally NOT deployed here: Grafana
-# comes from its own grafana-community chart, and there are no Windows nodes.
+# has its own release, and there are no Windows nodes.
 
 # ---- Grafana: disabled (deployed separately from grafana-community/grafana) ----
 grafana:
@@ -74,7 +74,7 @@ alertmanager:
   # alert is ever dropped or filtered out before it reaches Alertmanager's
   # alert store. That matters because whatever reads Alertmanager's alert set
   # — Grafana Alerting via the Mimir datasource by default, or Karma
-  # (`make karma`) in the METRICS_MODE=prometheus toggle — polls straight from
+  # (`make karma`) in the METRICS_MODE=prometheus mode — polls straight from
   # Alertmanager's API, so this default route is what guarantees all firing
   # alerts, of every severity and from every namespace, are visible there.
   config:
@@ -86,9 +86,9 @@ alertmanager:
       receiver: catch-all
       # Explicitly empty. Helm deep-merges this `config` onto the chart's
       # defaults, and the stock config ships a sub-route sending Watchdog to a
-      # "null" receiver — which our `receivers` below no longer defines. Left
-      # unset, that stale sub-route survives the merge and Alertmanager rejects
-      # the config ("undefined receiver null"). Clearing it sends *everything*,
+      # "null" receiver — which our `receivers` below does not define. Left
+      # unset, that sub-route survives the merge and Alertmanager rejects the
+      # config ("undefined receiver null"). Clearing it sends *everything*,
       # Watchdog included, to catch-all.
       routes: []
     receivers:

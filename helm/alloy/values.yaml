@@ -17,9 +17,9 @@
 # helm/kube-prometheus-stack/values.yaml); Alloy reads them directly with its
 # own Kubernetes client, without needing the Operator's reconcile loop.
 #
-# Toggle METRICS_MODE=prometheus hands metrics back to kube-prometheus-stack's
-# own Prometheus — see values-prometheus-metrics.yaml, which replaces the
-# config below with a metrics-free version of the same pipeline.
+# Under METRICS_MODE=prometheus, kube-prometheus-stack's own Prometheus owns
+# metrics instead — see values-prometheus-metrics.yaml (a logs/traces/profiles-
+# only version of the config below) and docs/metrics-modes.md.
 
 controller:
   type: daemonset

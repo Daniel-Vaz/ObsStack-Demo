@@ -10,7 +10,8 @@
 # first place.
 #
 # This is a small first-party chart (no upstream Helm chart is published for
-# Karma), deployed by `make karma` — part of `make up`.
+# Karma), deployed by `make karma` — part of `make up` only in the
+# METRICS_MODE=prometheus mode (see docs/metrics-modes.md).
 
 image:
   repository: ghcr.io/prymitive/karma

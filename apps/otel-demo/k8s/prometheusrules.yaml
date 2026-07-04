@@ -1,9 +1,8 @@
 # Metric-based alerts on the demo's simulated errors.
 #
-# The kube-prometheus-stack Prometheus selects PrometheusRules in ALL namespaces
-# (ruleSelector/ruleNamespaceSelector are widened to {} in
-# helm/kube-prometheus-stack/values.yaml), so this is picked up with no change to
-# the stack. Firing alerts flow to Alertmanager and show up in Karma.
+# Alloy discovers PrometheusRules in every namespace and syncs them into Mimir's
+# ruler, which evaluates them — so this is picked up with no change to the stack.
+# Firing alerts flow to Alertmanager and show up in Grafana Alerting.
 #
 # Drive them from the web UI at :8080 — set "simulated errors" to e.g. 30% and
 # toggle Auto load. The counters below come from the app:

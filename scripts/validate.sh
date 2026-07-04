@@ -7,8 +7,8 @@ set -uo pipefail
 cd "$(dirname "$0")/.."
 source scripts/lib.sh
 
-# alloy (default) or prometheus (legacy toggle) — see the Makefile. Only
-# Karma and Prometheus itself differ between the two: Karma isn't deployed,
+# alloy (default) or prometheus — see the Makefile and docs/metrics-modes.md.
+# Only Karma and Prometheus itself differ between the two: Karma isn't deployed,
 # and Prometheus's own server doesn't run, under METRICS_MODE=alloy.
 METRICS_MODE="${METRICS_MODE:-alloy}"
 

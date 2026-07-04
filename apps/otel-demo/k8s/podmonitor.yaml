@@ -1,7 +1,7 @@
 # One PodMonitor for all scrapeable demo services (those carrying scrape=metrics).
-# The existing kube-prometheus-stack Prometheus selects PodMonitors in ALL
-# namespaces (podMonitorNamespaceSelector: {}), so this is picked up with no
-# change to the stack; scraped samples are remote-written to Mimir.
+# Alloy discovers PodMonitors in every namespace straight from the
+# Prometheus-Operator CRDs, so this is picked up with no change to the stack;
+# scraped samples are remote-written to Mimir.
 apiVersion: monitoring.coreos.com/v1
 kind: PodMonitor
 metadata:

@@ -27,7 +27,7 @@ Mimir) plus Pyroscope and Alloy.
 ## The mental model: app → collector → store → Grafana
 
 ```
-  your Go service                 Grafana Alloy / Prometheus            Grafana
+  your Go service                 Grafana Alloy               Grafana
   (emits signals)  ───────────▶   (collects & forwards)   ───────────▶  (you look here)
                                                             Tempo / Loki
                                                             Mimir / Pyroscope
@@ -163,17 +163,18 @@ orders.Add(ctx, 1, metric.WithAttributes(attribute.String("route", "/")))
 ### How the stack reads them (pull, not push)
 
 Metrics work differently from traces. Instead of the app *pushing* to a collector, the app
-**exposes** its current metric values at an HTTP endpoint and Prometheus **pulls** (scrapes)
-them on a schedule. `Init` sets up a Prometheus exporter, and
+**exposes** its current metric values at an HTTP endpoint and the collector **pulls**
+(scrapes) them on a schedule. `Init` sets up a Prometheus exporter, and
 [`httpx.NewMux`](../apps/otel-demo/internal/httpx/httpx.go#L26) serves it:
 
 ```go
-mux.Handle("/metrics", promhttp.Handler())   // Prometheus scrapes this
+mux.Handle("/metrics", promhttp.Handler())   // the collector scrapes this
 ```
 
-A `PodMonitor` tells Prometheus which pods to scrape (it selects the `scrape: metrics` pod
-label). Prometheus then remote-writes to Mimir. **You expose `/metrics`; the platform does
-the rest.**
+A `PodMonitor` tells the collector which pods to scrape (it selects the `scrape: metrics`
+pod label). Alloy reads that `PodMonitor` straight from the Prometheus-Operator CRDs,
+scrapes the endpoint, and remote-writes to Mimir. **You expose `/metrics`; the platform
+does the rest.**
 
 ## 3. Logs — structured JSON, correlated to traces
 

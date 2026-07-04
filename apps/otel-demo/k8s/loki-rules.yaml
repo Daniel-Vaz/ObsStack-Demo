@@ -12,10 +12,10 @@
 # `/rules/fake/` — auth is disabled cluster-wide so every tenant is "fake", and
 # the local ruler loads rules from `<store>/<tenant>/`.
 #
-# Fired alerts go to the same Alertmanager as the Prometheus rules
+# Fired alerts go to the same Alertmanager as the metric-based rules
 # (see helm/loki/values.yaml -> rulerConfig.alertmanager_url), so they show up in
-# Karma alongside the metric-based ones. Turn up "simulated errors" in the web UI
-# to make them fire.
+# Grafana Alerting alongside the metric-based ones. Turn up "simulated errors" in
+# the web UI to make them fire.
 apiVersion: v1
 kind: ConfigMap
 metadata:

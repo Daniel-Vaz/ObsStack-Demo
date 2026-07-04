@@ -6,7 +6,7 @@ cluster into a metrics-rich one.
 
 > Chart: `prometheus-community/kube-prometheus-stack` (v87.5.1) ·
 > config: [`helm/kube-prometheus-stack/values.yaml`](../../helm/kube-prometheus-stack/values.yaml) ·
-> UIs: Prometheus `http://localhost:9090`, Alertmanager `http://localhost:9093`
+> UI: Alertmanager `http://localhost:9093`
 
 ## What it is
 
@@ -40,52 +40,41 @@ adding a new scrape target is declarative.
 
 ## How we use it in this demo
 
-This demo has **two metrics-collection modes**, toggled with `METRICS_MODE`
-(`make up METRICS_MODE=prometheus` for the legacy setup; `alloy` is the
-default). KPS's role differs between them:
+In this demo KPS deploys the Prometheus **Operator**, kube-state-metrics,
+node-exporter, and **Alertmanager** — **not a Prometheus server**. The Operator's
+job is to own the CRDs (`ServiceMonitor`/`PodMonitor`/`PrometheusRule`);
+[Alloy](./alloy.md) reads them directly and does the scraping and rule-syncing.
+Alertmanager is where alerts land, fired by [Mimir](./mimir.md)'s ruler.
 
-- **Default (`METRICS_MODE=alloy`)**: KPS deploys the Prometheus Operator,
-  kube-state-metrics, node-exporter, and Alertmanager — **not Prometheus
-  itself**. The Operator's only job here is to own the CRDs
-  (`ServiceMonitor`/`PodMonitor`/`PrometheusRule`); [Alloy](./alloy.md) reads
-  them directly and does the scraping and rule-syncing instead. Alertmanager
-  stays, since it's still where alerts land (fired by
-  [Mimir](./mimir.md)'s ruler in this mode).
-- **Toggle (`METRICS_MODE=prometheus`)**: KPS additionally deploys Prometheus
-  itself, restoring the original setup described below.
-
-### The `METRICS_MODE=prometheus` setup
-
-- Prometheus discovers every component via the **ServiceMonitors** each chart
-  emits, plus the demo app's `PodMonitor`.
-- It keeps only a short **2-hour local buffer**, then **remote-writes** all
-  samples to [Mimir](./mimir.md) for long-term storage. Grafana reads metrics
-  from Mimir, not from Prometheus directly.
-- The bundled Grafana is **disabled** (we run Grafana as its own release), and a
+- **The exporters light up the standard dashboards.** kube-state-metrics exposes
+  the *state* of Kubernetes objects, and node-exporter exposes host metrics —
+  both scraped by Alloy and remote-written to Mimir, powering the stock
+  Kubernetes dashboards in Grafana out of the box.
+- **Alertmanager routes every alert** through a single catch-all receiver, so
+  metric alerts (from Mimir's ruler) and log alerts (from Loki's ruler) land
+  together and show up in Grafana Alerting.
+- **The bundled Grafana is disabled** (we run Grafana as its own release), and a
   few kind-specific scrape targets are turned off to avoid noise.
 
-See [architecture.md](../architecture.md#metrics-collection--alerting-two-modes)
-for the exact values and rationale behind both modes.
+See [architecture.md](../architecture.md#metrics-collection--alerting) for the
+exact values and rationale.
+
+> Prometheus's own server can be brought into the loop instead of Alloy for
+> specific testing scenarios — see [metrics-modes.md](../metrics-modes.md).
 
 ## Try it
 
-- With `METRICS_MODE=prometheus`: open Prometheus at `http://localhost:9090` →
-  **Status → Targets** to watch it discover and scrape every component, and run
-  a PromQL query like `up` (1 = target healthy) or
+- Open Alertmanager at `http://localhost:9093` to see the alert-routing UI.
+- In Grafana, **Explore → Mimir** queries the metrics Alloy scrapes and
+  remote-writes — try `up` (1 = target healthy) or
   `rate(http_server_request_duration_seconds_count[1m])`.
-- In either mode: open Alertmanager at `http://localhost:9093` to see the
-  alert-routing UI, and in Grafana, **Explore → Mimir** queries the metrics
-  after remote-write (from Alloy by default, or from Prometheus in the toggle).
-
-![Prometheus query UI at localhost:9090 graphing an apiserver burn-rate PromQL expression](../images/prometheus-ui.png)
-*Prometheus's own UI at `http://localhost:9090` — the short 2-hour local buffer, queryable with PromQL before samples are remote-written to Mimir.*
 
 Once metrics land in Mimir, Grafana renders them into dashboards. The bundled
 kube-state-metrics and node-exporter light up the standard Kubernetes dashboards
 out of the box:
 
 ![Grafana Kubernetes / Compute Resources / Cluster dashboard showing CPU and memory utilisation panels by namespace](../images/grafana-dashboard-example.png)
-*A stock **Kubernetes / Compute Resources / Cluster** dashboard in Grafana, driven by the metrics KPS scrapes and remote-writes to Mimir.*
+*A stock **Kubernetes / Compute Resources / Cluster** dashboard in Grafana, driven by the kube-state-metrics and node-exporter metrics Alloy scrapes and remote-writes to Mimir.*
 
 ## Why it matters
 

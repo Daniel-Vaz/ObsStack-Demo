@@ -1,8 +1,8 @@
 # Overlay applied on top of values.yaml only when METRICS_MODE=prometheus
-# (see the Makefile). Restores the original "as-is" architecture: KPS's own
-# Prometheus does the scraping, evaluates PrometheusRules itself, and fires to
-# Alertmanager. In the default METRICS_MODE=alloy, Prometheus itself is
-# disabled (see values.yaml) and Alloy does this work instead.
+# (see the Makefile and docs/metrics-modes.md). KPS's own Prometheus does the
+# scraping, evaluates PrometheusRules itself, and fires to Alertmanager. In the
+# default METRICS_MODE=alloy, Prometheus itself is disabled (see values.yaml)
+# and Alloy does this work instead.
 
 # ---- Prometheus ----
 prometheus:

@@ -14,13 +14,15 @@ nodes:
         hostPort: 3000
       - containerPort: 30345   # Alloy UI         -> http://localhost:12345
         hostPort: 12345
-      - containerPort: 30090   # Prometheus UI    -> http://localhost:9090
-        hostPort: 9090
       - containerPort: 30093   # Alertmanager UI  -> http://localhost:9093
         hostPort: 9093
       - containerPort: 30080   # otel-demo web UI -> http://localhost:8080
         hostPort: 8080
       - containerPort: 30466   # Headlamp UI      -> http://localhost:4466
         hostPort: 4466
+      # Mapped for the METRICS_MODE=prometheus mode (see docs/metrics-modes.md);
+      # idle in the default mode, where nothing listens on these node ports.
+      - containerPort: 30090   # Prometheus UI    -> http://localhost:9090
+        hostPort: 9090
       - containerPort: 30081   # Karma alert UI   -> http://localhost:8081
         hostPort: 8081

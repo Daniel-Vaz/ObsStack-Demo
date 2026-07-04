@@ -33,7 +33,8 @@ loki:
   # ---- Ruler: log-based alerting ------------------------------------------
   # Loki's ruler evaluates LogQL alerting rules on a schedule and fires the
   # results into Alertmanager — the same Alertmanager kube-prometheus-stack runs,
-  # so Loki alerts land next to Prometheus ones and show up in Karma.
+  # so Loki alerts land next to the metric-based ones and show up in Grafana
+  # Alerting.
   #
   # Rules are provisioned by the chart's rules sidecar (see `sidecar.rules`
   # below): it watches for ConfigMaps labelled `loki_rule` and drops their files
@@ -97,9 +98,9 @@ sidecar:
     folder: /rules
     folderAnnotation: k8s-sidecar-target-directory
 
-# Emit a ServiceMonitor so kube-prometheus-stack's Prometheus scrapes Loki.
-# Loki's own self-monitoring (its bundled agent) stays off — Prometheus is the
-# only scraper now.
+# Emit a ServiceMonitor so the metrics collector scrapes Loki. Loki's own
+# self-monitoring (its bundled agent) stays off — Alloy is the scraper (or
+# Prometheus in the METRICS_MODE=prometheus mode).
 monitoring:
   selfMonitoring:
     enabled: false

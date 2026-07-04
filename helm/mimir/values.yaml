@@ -11,13 +11,13 @@
 #             METRICS_MODE): http://mimir-gateway/api/v1/push
 # Read  path (Grafana datasource):       http://mimir-gateway/prometheus
 #
-# The ruler IS enabled by default (METRICS_MODE=alloy): Alloy syncs
-# PrometheusRules into it (see helm/alloy/values.yaml mimir.rules.kubernetes),
-# and it evaluates them and fires to the kube-prometheus-stack Alertmanager —
-# Mimir's own bundled Alertmanager component stays disabled in both modes; the
-# one Alertmanager throughout is the one kube-prometheus-stack deploys. The
-# METRICS_MODE=prometheus toggle disables the ruler again (see
-# values-prometheus-metrics.yaml) since Prometheus itself evaluates rules there.
+# The ruler is enabled: Alloy syncs PrometheusRules into it (see
+# helm/alloy/values.yaml mimir.rules.kubernetes), and it evaluates them and
+# fires to the kube-prometheus-stack Alertmanager — Mimir's own bundled
+# Alertmanager component stays disabled; the one Alertmanager throughout is the
+# one kube-prometheus-stack deploys. The METRICS_MODE=prometheus mode disables
+# the ruler (see values-prometheus-metrics.yaml and docs/metrics-modes.md) since
+# Prometheus itself evaluates rules there.
 
 # Don't deploy the bundled Kafka statefulset...
 kafka:
@@ -113,7 +113,7 @@ gateway:
 # ---- Ruler: evaluates PrometheusRules synced by Alloy, fires to the
 # kube-prometheus-stack Alertmanager (alertmanager_url above). Disabled by the
 # values-prometheus-metrics.yaml overlay (METRICS_MODE=prometheus), where
-# Prometheus itself evaluates rules instead. ----
+# Prometheus itself evaluates rules. ----
 ruler:
   enabled: true
   replicas: 1
@@ -148,7 +148,7 @@ minio:
     requests: { cpu: 100m, memory: 128Mi }
 
 # Emit ServiceMonitors so the metrics collector (Alloy by default, or
-# kube-prometheus-stack's Prometheus in the METRICS_MODE=prometheus toggle)
+# kube-prometheus-stack's Prometheus in the METRICS_MODE=prometheus mode)
 # scrapes every Mimir component. The chart only targets components that
 # actually serve /metrics (the nginx gateway is excluded), so there are no
 # perpetually-down targets.

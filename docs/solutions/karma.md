@@ -8,12 +8,12 @@
 > UI: `http://localhost:8081`
 
 > [!NOTE]
-> Karma is only deployed in the legacy `METRICS_MODE=prometheus` toggle
-> (`make up METRICS_MODE=prometheus`). In the default `METRICS_MODE=alloy`
-> architecture it's skipped: Grafana Alerting (via the Mimir datasource, whose
-> `manageAlerts` is on) plus the Alertmanager datasource already cover "what's
-> firing right now," so a separate read-only Alertmanager dashboard is
-> redundant. See [architecture.md](../architecture.md#metrics-collection--alerting-two-modes).
+> Karma is deployed only in the alternate **Prometheus metrics-collection mode**,
+> an opt-in for specific testing scenarios (see
+> [metrics-modes.md](../metrics-modes.md)). In the default setup it's skipped:
+> Grafana Alerting (via the Mimir datasource, whose `manageAlerts` is on) plus
+> the Alertmanager datasource already cover "what's firing right now," so a
+> separate read-only Alertmanager dashboard isn't needed.
 
 ## What it is
 
@@ -48,9 +48,10 @@ already silenced?"**
 
 ## How we use it in this demo
 
-Karma is deployed with `make up METRICS_MODE=prometheus` (target: `make karma`,
-part of `stack`'s prerequisites only in that mode) into the `observability`
-namespace, exposed on `http://localhost:8081`.
+Karma is deployed in the Prometheus metrics-collection mode
+(`make up METRICS_MODE=prometheus`; target `make karma`, part of `stack`'s
+prerequisites in that mode) into the `observability` namespace, exposed on
+`http://localhost:8081`. See [metrics-modes.md](../metrics-modes.md).
 
 - **Points at the in-cluster Alertmanager.**
   [`helm/karma/values.yaml`](../../helm/karma/values.yaml) configures one

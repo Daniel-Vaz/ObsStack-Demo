@@ -1,7 +1,6 @@
-# Grafana — deployed and fully managed by the Grafana Operator
-# (https://github.com/grafana/grafana-operator) via CRDs (see templates/),
-# rather than the grafana-community/grafana Helm chart. Requires
-# helm/grafana-operator installed first (the CRDs' owner) — see the
+# Grafana — deployed and managed by the Grafana Operator
+# (https://github.com/grafana/grafana-operator) via CRDs (see templates/).
+# Requires helm/grafana-operator installed first (the CRDs' owner) — see the
 # Makefile's `grafana-operator` -> `grafana` ordering.
 #
 # Login: admin / admin (demo only). Reach the UI with `make grafana-ui`.
@@ -25,8 +24,7 @@ resources:
 # grafana_dashboard=1 — this is how kube-prometheus-stack's bundled default
 # dashboards reach Grafana — and materializes them as dashboard JSON files
 # under a directory Grafana's own file-based provisioner reads (see
-# templates/grafana.yaml). Same mechanism, same image, as the
-# grafana-community/grafana chart's built-in `sidecar.dashboards` uses.
+# templates/grafana.yaml).
 sidecar:
   image: quay.io/kiwigrid/k8s-sidecar:2.8.1
   resources:
@@ -44,13 +42,12 @@ datasources:
     jsonData:
       prometheusType: Mimir
       timeInterval: 15s
-      # Mimir's ruler is enabled by default (METRICS_MODE=alloy; see
-      # helm/mimir/values.yaml) — Alloy syncs PrometheusRules into it and it
-      # evaluates them against the kube-prometheus-stack Alertmanager, so
-      # let Grafana Alerting manage/show those rules too. The
-      # values-prometheus-metrics.yaml overlay flips this back to false for
-      # the METRICS_MODE=prometheus toggle, where the ruler is disabled and
-      # this probe would otherwise 502.
+      # Mimir's ruler is enabled (see helm/mimir/values.yaml) — Alloy syncs
+      # PrometheusRules into it and it evaluates them against the
+      # kube-prometheus-stack Alertmanager, so let Grafana Alerting manage/show
+      # those rules too. The values-prometheus-metrics.yaml overlay sets this to
+      # false for the METRICS_MODE=prometheus mode, where the ruler is disabled
+      # and this probe would otherwise 502.
       manageAlerts: true
 
   - name: Loki
@@ -103,7 +100,7 @@ datasources:
     url: http://kube-prometheus-stack-alertmanager.observability.svc.cluster.local:9093
     jsonData:
       implementation: prometheus
-      # Let Grafana surface KPS/Prometheus alerts against this Alertmanager.
+      # Let Grafana surface the alerts held in this Alertmanager.
       handleGrafanaManagedAlerts: false
 
 # Grafana LLM app plugin (grafana-llm-app), provisioned to talk to this stack's
@@ -139,11 +136,10 @@ llm:
 #   - Unsigned, so the id is added to allow_loading_unsigned_plugins in the
 #     Grafana CR config.
 #
-# Version note: upstream's build/publish workflow only fires on legacy `v*`
-# tags, but releases are now tagged `graft-v*` — so v0.2.0 is the newest tag
-# that actually ships a prebuilt zip (the v0.3.0–v0.6.x sources have no
-# downloadable artifact). Bump pluginUrl if/when upstream publishes newer
-# builds again.
+# Version note: upstream's build/publish workflow fires on `v*` tags, but
+# releases are tagged `graft-v*` — so v0.2.0 is the newest tag that ships a
+# prebuilt zip (the v0.3.0–v0.6.x sources have no downloadable artifact). Bump
+# pluginUrl if upstream publishes newer builds.
 graft:
   enabled: true
   pluginUrl: https://github.com/vikshana/vikshana-graft-app/releases/download/v0.2.0/vikshana-graft-app-v0.2.0.zip

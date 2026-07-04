@@ -1,14 +1,14 @@
 # Overlay applied on top of values.yaml only when METRICS_MODE=prometheus
-# (see the Makefile). `alloy.configMap.content` is a single string, and a
-# later --values file replaces it wholesale rather than deep-merging — so this
-# overlay must carry Alloy's *entire* River config, not just a diff. It's
-# today's default logs/traces/profiles-only pipeline, with the metrics section
-# (prometheus.remote_write / prometheus.operator.* / mimir.rules.kubernetes)
-# from values.yaml deliberately left out: in this legacy toggle, kube-
+# (see the Makefile and docs/metrics-modes.md). `alloy.configMap.content` is a
+# single string, and a later --values file replaces it wholesale rather than
+# deep-merging — so this overlay must carry Alloy's *entire* River config, not
+# just a diff. It's a logs/traces/profiles-only pipeline, with the metrics
+# section (prometheus.remote_write / prometheus.operator.* /
+# mimir.rules.kubernetes) from values.yaml left out: in this mode, kube-
 # prometheus-stack's own Prometheus (values-prometheus-metrics.yaml in that
-# chart) owns metrics and rule evaluation instead. Kept in lockstep with
-# values.yaml's OTLP-logs-to-Loki bridge below, since only metrics differs
-# between the two modes.
+# chart) owns metrics and rule evaluation. Kept in lockstep with values.yaml's
+# OTLP-logs-to-Loki bridge below, since only metrics differs between the two
+# modes.
 
 controller:
   type: daemonset

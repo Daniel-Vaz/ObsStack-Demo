@@ -1,9 +1,9 @@
 # Overlay applied on top of values.yaml only when METRICS_MODE=prometheus
-# (see the Makefile). `datasources` is a YAML list, and Helm replaces whole
-# lists on override rather than merging by entry — so this overlay must
-# repeat the *entire* datasources list, not just the one field that changes.
-# The only difference from values.yaml is the Mimir entry's
-# `manageAlerts: false`: in this legacy toggle, Mimir's ruler is disabled
+# (see the Makefile and docs/metrics-modes.md). `datasources` is a YAML list,
+# and Helm replaces whole lists on override rather than merging by entry — so
+# this overlay must repeat the *entire* datasources list, not just the one field
+# that changes. The only difference from values.yaml is the Mimir entry's
+# `manageAlerts: false`: in this mode, Mimir's ruler is disabled
 # (helm/mimir/values-prometheus-metrics.yaml), so Grafana Alerting must not
 # probe/manage rules against it (that would 502).
 datasources:
