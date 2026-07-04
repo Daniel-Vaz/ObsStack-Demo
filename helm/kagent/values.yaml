@@ -88,8 +88,9 @@ kagent-tools:
 # OCI-sourced with nowhere local to template it — see
 # helm/kagent/obs-agent.yaml (applied by the Makefile's `kagent` target
 # right after this chart installs) for the full definition: system prompt,
-# tool selection (Kubernetes/Helm/Prometheus tools from kagent's own tool
-# server, plus every tool grafana-mcp exposes), and A2A skills.
+# tool selection (just datetime_get_current_time from kagent's own tool
+# server, plus a curated read/query subset of grafana-mcp's tools), and A2A
+# skills.
 #
 # The chart's own built-in agents are explicitly disabled rather than left
 # at their defaults, including the two that would otherwise be closest to

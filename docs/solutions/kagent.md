@@ -40,11 +40,10 @@ upstream chart ships (see "No stock agents — ObsAgent instead" below).
   you (browser)  ──chat──▶  kagent UI  ──▶  controller  ──▶  ObsAgent
                                                   │                   │
                                           ModelConfig            its tools
-                                                  │                   │         ┌──▶  this cluster (k8s_*, helm_*)
+                                                  │                   │         ┌──▶  datetime_get_current_time (kagent-tools)
                                                   ▼                   └─────────┤
-                                               Ollama                           └──▶  grafana-mcp (all tools) ──▶ this
+                                               Ollama                           └──▶  grafana-mcp (curated subset) ──▶ this
                                           (llama3.1:8b)                              Grafana/Mimir/Loki/Tempo/Pyroscope
-                                                                                 └──▶  prometheus_* (kagent-tools) ──▶ Mimir
 
   kagent + kagent-tools + grafana-mcp + ObsAgent  ──OTLP traces/logs──▶  Alloy  ──▶  Tempo / Loki
 ```
@@ -67,13 +66,15 @@ does **not** run) into the `observability` namespace.
   defines ObsAgent as a raw `Agent` CRD manifest (applied by the Makefile's
   `kagent` target right after the Helm install — the chart itself is
   OCI-sourced, with nowhere local to template a custom agent into it). Its
-  tools: `k8s_*`, `helm_*`, `prometheus_*`, and `datetime_get_current_time`
-  from kagent's own built-in tool server, plus **every** tool `grafana-mcp`
-  exposes (dashboards, Prometheus/Mimir, Loki, Pyroscope, alerting,
-  incidents, on-call, Sift investigations, and more — see the manifest's
-  header comment for why `toolNames` is *omitted* rather than listing all
-  ~65 of them: the `Agent` CRD caps `toolNames` at 50 entries, and an
-  omitted/empty filter is kagent's own documented way to mean "all tools").
+  tools: just `datetime_get_current_time` from kagent's own built-in tool
+  server (no direct Kubernetes or Helm access), plus a curated subset of
+  `grafana-mcp`'s ~65 tools — dashboard search/update, datasource lookup,
+  read/query access to Prometheus/Mimir, Loki, Tempo, and Pyroscope, one
+  Sift-derived slow-request finder, and alert-rule management. Everything
+  else about incidents, on-call, the rest of Sift's investigations, alert
+  routing, annotations, snapshots, plugins, and provisioning is
+  deliberately left out — see the manifest's header comment and
+  `toolNames` list for the exact set.
 - **No API key — talks to [Ollama](./ollama.md).** `providers.default: ollama`
   points kagent's default `ModelConfig` at
   `ollama.observability.svc.cluster.local:11434`, serving `llama3.1:8b`. The
@@ -82,7 +83,7 @@ does **not** run) into the `observability` namespace.
   of KV-cache, CPU-only inference would blow past Ollama's memory limit.
 - **`grafana-mcp` is ObsAgent's main tool server.** Read/query/manage access
   to Grafana dashboards, datasources, alerting, and — through Grafana's own
-  datasources — Mimir, Loki, and Pyroscope. It authenticates with a Grafana
+  datasources — Mimir, Loki, Tempo, and Pyroscope. It authenticates with a Grafana
   service-account token provisioned entirely declaratively: a
   `GrafanaServiceAccount` CR in [`helm/grafana`](../../helm/grafana) has the
   Grafana Operator create the service account, generate a token, and write
@@ -121,11 +122,11 @@ make ai   # deploys Ollama + kagent + ObsAgent (not part of `make up`)
 Open `http://localhost:8090`, pick **ObsAgent**, and ask it something that
 needs live data rather than general knowledge:
 
-- "What's the status of my cluster right now?"
-- "Are any alerts currently firing?"
-- "What Helm releases are deployed in the observability namespace?"
 - "Query Mimir for the rate of `demo_orders_total` over the last 5 minutes."
+- "Search the otel-demo logs in Loki for error patterns in the last hour."
+- "Find the slowest requests in otel-demo and pull the trace behind one."
 - "Search Grafana for dashboards related to otel-demo."
+- "What alert rules exist for the observability namespace?"
 
 Confirm everything's wired up before chatting, if you want to check first:
 
@@ -138,14 +139,14 @@ kubectl get modelconfig -n observability                     # default-model-con
 ## Why it matters
 
 Most "AI + Kubernetes" demos either call out to a hosted API (cost, API key,
-network dependency) or bolt a chatbot on top with no real access to cluster
-or telemetry state (so it can only guess). ObsAgent is neither: genuine read
-and write access to this stack's own Mimir/Loki/Tempo/Pyroscope data and the
-cluster itself, running on a fully local model — so this demo stays true to
-its own goal, a **self-contained**, laptop-sized environment with zero
-external dependencies. And because it's wired into the same OTel pipeline as
-everything else, ObsAgent's own behavior is exactly as observable as the
-workloads it's helping you troubleshoot.
+network dependency) or bolt a chatbot on top with no real access to
+telemetry state (so it can only guess). ObsAgent is neither: genuine
+read/query access to this stack's own Mimir/Loki/Tempo/Pyroscope data plus
+Grafana's dashboards and alert rules, running on a fully local model — so
+this demo stays true to its own goal, a **self-contained**, laptop-sized
+environment with zero external dependencies. And because it's wired into
+the same OTel pipeline as everything else, ObsAgent's own behavior is
+exactly as observable as the workloads it's helping you troubleshoot.
 
 ## Learn more
 

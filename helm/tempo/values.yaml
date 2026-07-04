@@ -12,6 +12,12 @@ tempo:
   # Serve TraceQL results (search + metrics) over HTTP streaming. Grafana's
   # Tempo datasource and the Traces Drilldown app use this for the metrics API.
   streamOverHttpEnabled: true
+  # Expose Tempo's own MCP server (Streamable HTTP, at /api/mcp on the query
+  # port 3200) so an AI agent can query traces directly — today ObsAgent
+  # (helm/kagent/obs-agent.yaml) has no tool that reaches Tempo at all.
+  queryFrontend:
+    mcp_server:
+      enabled: true
   # Enable the OTLP receivers (gRPC + HTTP) so Alloy can forward traces.
   receivers:
     otlp:
