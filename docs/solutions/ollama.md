@@ -1,6 +1,6 @@
 # Ollama
 
-**In one line:** a local server that runs open LLMs (like `llama3.1:8b`) so
+**In one line:** a local server that runs open LLMs (like `llama3.2:3b`) so
 this demo needs no external AI API key.
 
 > Chart: `ollama-helm/ollama` (1.65.0) ·
@@ -10,7 +10,7 @@ this demo needs no external AI API key.
 > [!NOTE]
 > **Part of `make up`, but the heaviest component.** Ollama backs Grafana's
 > Graft AI assistant, so it's deployed by default — expect the first `make up`
-> to take a while (multiple CPUs, several GiB of RAM, ~4.7GB model pull).
+> to take a while (multiple CPUs, several GiB of RAM, ~2GB model pull).
 
 ## What it is
 
@@ -31,7 +31,7 @@ and the Graft app plugin chats through that. Everywhere else in this demo,
 means an inference server:
 
 ```
-  Grafana Graft app  ──▶  grafana-llm-app  ──chat/completion──▶  Ollama  ──▶  llama3.1:8b
+  Grafana Graft app  ──▶  grafana-llm-app  ──chat/completion──▶  Ollama  ──▶  llama3.2:3b
   (chat UI in Grafana)     (LLM plugin)      (OpenAI /v1 API)     (local, CPU inference)
 ```
 
@@ -41,16 +41,26 @@ Ollama is deployed by `make ollama` (folded into `make up`) into the
 `observability` namespace — the same namespace as everything else in this
 demo, kept single-namespace for simplicity.
 
-- **`llama3.1:8b`, pulled at pod startup.** [`helm/ollama/values.yaml`](../../helm/ollama/values.yaml)
-  lists `llama3.1:8b` under both `ollama.models.pull` and `ollama.models.run`: pulled
-  (~4.7GB download) and then loaded into memory so the first request from
+- **`llama3.2:3b`, pulled at pod startup.** [`helm/ollama/values.yaml`](../../helm/ollama/values.yaml)
+  lists `llama3.2:3b` under both `ollama.models.pull` and `ollama.models.run`: pulled
+  (~2GB download) and then loaded into memory so the first request from
   Graft isn't slowed by a cold load. This happens via a `postStart` lifecycle
   hook — Kubernetes doesn't mark the container `Running` until it completes,
   so the `ollama` Makefile target uses a generous `OLLAMA_TIMEOUT` (default
-  `20m`) rather than the stack's usual `HELM_TIMEOUT`.
-- **CPU only, no persistence.** There's no GPU in this kind/Podman setup, so
-  inference is CPU-bound — fine for the occasional chat query from Graft (expect
-  ~30s+ per response), not for load. No PersistentVolumeClaim either: model
+  `20m`) rather than the stack's usual `HELM_TIMEOUT`. `OLLAMA_KEEP_ALIVE=24h`
+  (set via `extraEnv`) keeps the model resident so it doesn't unload after the
+  default 5-minute idle and pay a cold reload on the next query.
+- **Why 3b, not a bigger model.** Grafana's `grafana-llm-app` plugin hardcodes
+  a 2-minute HTTP timeout on its call to Ollama. On this CPU-only box an 8B
+  model generates at ~2-3 tok/s, so a normal Graft turn (large tool-schema
+  prompt + a few hundred output tokens) runs past 2 minutes and the request
+  fails. `llama3.2:3b` runs ~2.4x faster (~6 tok/s, a ~300-token answer in ~45s
+  vs ~115s), staying inside that timeout while remaining capable enough for
+  Graft's tool-calling.
+- **CPU only, no persistence.** WSL2 exposes no GPU render node (`/dev/dri`) or
+  NPU (`/dev/accel`) into Linux — only `/dev/dxg` — and Ollama supports only
+  NVIDIA/AMD GPUs regardless, so inference is CPU-bound (the pod is given a
+  generous CPU slice in `resources`). No PersistentVolumeClaim either: model
   files live in the container filesystem and get re-pulled on every pod start.
   A PVC wouldn't survive `make down` anyway (kind's default storage backs onto
   the node container's own filesystem), so this demo accepts the re-pull cost
@@ -69,7 +79,7 @@ Ollama directly instead:
 ```bash
 kubectl port-forward -n observability svc/ollama 11434:11434
 curl http://localhost:11434/api/generate -d '{
-  "model": "llama3.1:8b",
+  "model": "llama3.2:3b",
   "prompt": "In one sentence, what is Kubernetes?",
   "stream": false
 }'
@@ -82,7 +92,7 @@ key and incurs a cost. A local model removes that friction entirely: `make up`
 alone gets you a working model backend, no signup, no key, no bill — so Graft
 stays true to this demo's own goal, a self-contained environment with zero
 external dependencies. The tradeoff is capability and speed (a CPU-run
-`llama3.1:8b` is slower and less capable than a frontier hosted model) — a
+`llama3.2:3b` is slower and less capable than a frontier hosted model) — a
 fair trade for a demo.
 
 ## Learn more

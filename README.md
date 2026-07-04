@@ -101,7 +101,7 @@ is deployed in both metrics modes by `make up`.
 | Alloy     | `grafana/alloy`  | 1.10.0 | DaemonSet collector — logs/traces/profiles, + metrics & rules by default (**METRICS_MODE=alloy**) | — |
 | Headlamp  | `headlamp/headlamp` | 0.43.0 | in-cluster dashboard (cluster-admin, no-login demo mode) | — |
 | Karma     | `helm/karma` (first-party) | v0.131 | **(METRICS_MODE=prometheus)** alert dashboard over Alertmanager (reads all alerts) | — |
-| Ollama    | `ollama-helm/ollama` | 1.65.0 | CPU inference, serves the `llama3.1:8b` model — model backend for Grafana's Graft AI assistant | none (re-pulled on pod start) |
+| Ollama    | `ollama-helm/ollama` | 1.65.0 | CPU inference, serves the `llama3.2:3b` model — model backend for Grafana's Graft AI assistant | none (re-pulled on pod start) |
 
 Alongside the stack, `make up` also builds and deploys the **OpenTelemetry demo
 app** (`otel-demo-app`) into its own `otel-demo` namespace — via plain
@@ -115,7 +115,7 @@ plugins ([`helm/grafana/values.yaml`](helm/grafana/values.yaml)): the official
 so no LLM API key is ever needed) and [**Graft**](https://github.com/vikshana/vikshana-graft-app),
 a community "AI Assistant for Grafana" app that layers a natural-language chat
 UI on top of it, using Grafana's built-in MCP tools to query your dashboards,
-metrics, logs, traces, and alerts. **Ollama** serves the `llama3.1:8b` model
+metrics, logs, traces, and alerts. **Ollama** serves the `llama3.2:3b` model
 locally (the heaviest component — CPU-only inference, so expect slow
 responses). Find **Graft** in the Grafana nav at `http://localhost:3000`. See
 [Learn the tools](#learn-the-tools) below for the full guides.

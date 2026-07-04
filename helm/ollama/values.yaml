@@ -1,15 +1,18 @@
 # Ollama — local LLM inference server (https://github.com/otwld/ollama-helm)
 #
-# Serves the llama3.1:8b model over Ollama's native REST API on :11434.
+# Serves the llama3.2:3b model over Ollama's native REST API on :11434.
 # Grafana's grafana-llm-app plugin (and the Graft assistant built on it — see
 # helm/grafana/values.yaml) use it as their model provider via Ollama's
 # OpenAI-compatible /v1 API, so this demo needs no external LLM API key.
 #
 # Lightweight/demo trade-offs:
-#   - CPU inference only (no GPU) — fine for an occasional demo query from
-#     Graft, not for load testing (expect ~30s+ per response).
+#   - CPU inference only. This is a WSL2 + kind + rootless-Podman setup on an
+#     Intel Core Ultra (Arc iGPU + NPU), but WSL2 exposes neither a GPU render
+#     node (/dev/dri) nor the NPU (/dev/accel) into Linux — only /dev/dxg — and
+#     Ollama can't use an Intel iGPU/NPU anyway (it supports only NVIDIA/AMD).
+#     So inference is CPU-bound; we give it a chunk of cores below.
 #   - No PersistentVolume: the model is pulled into the container filesystem
-#     by the postStart hook below on every pod start (~4.7GB download). A PVC
+#     by the postStart hook below on every pod start (~2GB download). A PVC
 #     wouldn't survive `make down` anyway on this kind/Podman setup (the
 #     default local-path-provisioner backing store lives inside the kind node
 #     container), so we accept the re-pull cost instead of adding a PVC that
@@ -29,19 +32,31 @@ ollama:
     # `helm --wait`) until this hook completes — see the Makefile's
     # `ollama` target, which uses a longer OLLAMA_TIMEOUT to cover it.
     pull:
-      - llama3.1:8b
+      - llama3.2:3b
     # Also load it into memory at startup so the first Graft request isn't
     # additionally slowed by a cold model load.
     run:
-      - llama3.1:8b
+      - llama3.2:3b
 
+# Keep the model resident. Ollama unloads an idle model after 5 minutes by
+# default, so the first Graft query after a lull would pay a cold reload on top
+# of already-slow CPU inference. Pin it in memory so demo queries stay warm.
+extraEnv:
+  - name: OLLAMA_KEEP_ALIVE
+    value: "24h"
+
+# CPU inference scales with cores. The kind node runs on a 14-thread host, so
+# give Ollama a generous slice (leaving headroom for the rest of the stack)
+# rather than the chart's small default — this is the other half of keeping a
+# Graft turn under the plugin's 2-minute timeout. 3B weights are ~2GB, so the
+# memory ask is modest.
 resources:
   requests:
-    cpu: 2000m
-    memory: 4096Mi
-  limits:
     cpu: 4000m
-    memory: 8192Mi
+    memory: 3072Mi
+  limits:
+    cpu: 10000m
+    memory: 6144Mi
 
 # Cluster-internal only.
 service:

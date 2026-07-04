@@ -75,7 +75,7 @@ KPS_VERSION            := 87.5.1
 HEADLAMP_VERSION       := 0.43.0
 OLLAMA_VERSION         := 1.65.0
 
-# ollama's postStart hook pulls the llama3 model (~4.7GB) on first start, and
+# ollama's postStart hook pulls the llama3.2:3b model (~2GB) on first start, and
 # Kubernetes doesn't mark the container "Running" (so readiness, and thus
 # `helm --wait`) until that hook completes — give it much more room than the
 # default HELM_TIMEOUT.
@@ -229,7 +229,7 @@ karma: namespace ## Deploy Karma (Alertmanager alert dashboard) from its local c
 		sleep 15; \
 	done
 
-ollama: repos namespace ## Deploy Ollama and pull the llama3 model (LLM backend for Grafana's Graft AI assistant)
+ollama: repos namespace ## Deploy Ollama and pull the llama3.2:3b model (LLM backend for Grafana's Graft AI assistant)
 	$(call helm_install,ollama,ollama-helm/ollama,$(OLLAMA_VERSION),,$(OLLAMA_TIMEOUT))
 
 # ---- Grouped deploys ---------------------------------------------------------
@@ -247,7 +247,7 @@ stack: kube-prometheus-stack backends grafana headlamp $(if $(filter prometheus,
 # Ollama is part of the default flow because Grafana's Graft AI assistant (and
 # the grafana-llm-app plugin it builds on — see helm/grafana/values.yaml) use it
 # as their local model backend. It's the heaviest thing in the repo (multiple
-# CPUs + several GiB of RAM for CPU-only llama3 inference, ~4.7GB model pull;
+# CPUs + several GiB of RAM for CPU-only llama3.2:3b inference, ~2GB model pull;
 # see helm/ollama/values.yaml), so expect the first `make up` to take a while.
 up: cluster stack alloy ollama validate demo ## Full setup: cluster + stack + Alloy + Ollama + validate + demo app
 	@echo

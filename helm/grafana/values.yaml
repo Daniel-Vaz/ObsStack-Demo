@@ -126,7 +126,7 @@ llm:
   url: http://ollama.observability.svc.cluster.local:11434
   # The plugin abstracts models into "base"/"large" slots; map both onto the
   # single model Ollama serves in this demo (see helm/ollama/values.yaml).
-  model: llama3.1:8b
+  model: llama3.2:3b
 
 # Graft — a community "AI Assistant for Grafana" app plugin
 # (https://github.com/vikshana/vikshana-graft-app) that layers a natural-language
