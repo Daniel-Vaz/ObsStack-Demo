@@ -20,7 +20,6 @@ logs, traces, profiles — plus the plumbing to collect, store, and view them.
 | [Pyroscope](./pyroscope.md) | Profiles storage | Continuous profiling — flame graphs over time |
 | [Alloy](./alloy.md) | Collection pipeline | One agent that collects metrics, logs, traces, *and* profiles |
 | [Headlamp](./headlamp.md) | Cluster UI | Point-and-click Kubernetes dashboard |
-| [Ollama](./ollama.md) | Local LLM inference | Runs `llama3.2:3b` locally — the model backend for Grafana's Graft AI assistant, no external AI API key needed |
 | [Kind & Podman](./kind-and-podman.md) | Local platform | A throwaway Kubernetes cluster on your laptop |
 
 Grafana itself isn't covered separately — it's the **single pane of glass** that
@@ -47,3 +46,7 @@ Read them in table order, or jump straight to whichever tool you're curious abou
 > An alternate metrics-collection mode for specific testing scenarios — running
 > kube-prometheus-stack's own Prometheus server, with [Karma](./karma.md) as an
 > Alertmanager dashboard — is documented in [metrics-modes.md](../metrics-modes.md).
+>
+> An alternate, key-less model backend for Grafana's Graft AI assistant —
+> running [Ollama](./ollama.md) in-cluster instead of Azure AI Foundry — is
+> documented in [llm-backends.md](../llm-backends.md).

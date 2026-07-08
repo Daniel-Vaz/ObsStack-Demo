@@ -42,6 +42,25 @@ ALLOY_EXTRA_VALUES   := $(if $(filter prometheus,$(METRICS_MODE)),--values $(HEL
 MIMIR_EXTRA_VALUES   := $(if $(filter prometheus,$(METRICS_MODE)),--values $(HELM_DIR)/mimir/values-prometheus-metrics.yaml,)
 GRAFANA_EXTRA_VALUES := $(if $(filter prometheus,$(METRICS_MODE)),--values $(HELM_DIR)/grafana/values-prometheus-metrics.yaml,)
 
+# ---- AI assistant LLM backend -------------------------------------------------
+# azure  (default): Grafana's LLM plugin (and the Graft assistant built on it)
+#        talk to an Azure AI Foundry endpoint. Needs AZURE_LLM_API_KEY set in
+#        .env (gitignored) — see helm/grafana/values.yaml.
+# ollama: an opt-in mode that instead deploys Ollama in-cluster as a local,
+#         key-less model backend. See docs/llm-backends.md.
+# Toggle with: make up LLM_BACKEND=ollama
+LLM_BACKEND ?= azure
+ifeq ($(filter $(LLM_BACKEND),azure ollama),)
+$(error LLM_BACKEND must be 'azure' or 'ollama', got '$(LLM_BACKEND)')
+endif
+
+# Loads AZURE_LLM_API_KEY (and anything else) from .env, if present.
+-include .env
+
+# Overlay applied only in LLM_BACKEND=ollama, swapping the `llm` block in
+# helm/grafana/values.yaml over to this stack's in-cluster Ollama.
+LLM_EXTRA_VALUES := $(if $(filter ollama,$(LLM_BACKEND)),--values $(HELM_DIR)/grafana/values-ollama-llm.yaml,)
+
 # ---- Demo application (apps/otel-demo) ----------------------------------------
 # An OTel-instrumented Go microservices app that feeds the stack's own
 # collectors (Alloy for traces/logs/profiles, and — depending on METRICS_MODE —
@@ -181,7 +200,8 @@ grafana: namespace grafana-operator ## Deploy Grafana (Operator-managed via CRDs
 		helm upgrade --install grafana $(HELM_DIR)/grafana \
 			--namespace $(NAMESPACE) --create-namespace \
 			--values $(HELM_DIR)/grafana/values.yaml \
-			$(GRAFANA_EXTRA_VALUES) \
+			$(GRAFANA_EXTRA_VALUES) $(LLM_EXTRA_VALUES) \
+			--set-string llm.apiKey=$(AZURE_LLM_API_KEY) \
 			--wait --timeout $(HELM_TIMEOUT) && break; \
 		if [ $$attempt -eq 3 ]; then \
 			echo ">> grafana: still not ready after $$attempt attempts" >&2; exit 1; \
@@ -234,7 +254,7 @@ karma: namespace ## Deploy Karma (Alertmanager alert dashboard) from its local c
 		sleep 15; \
 	done
 
-ollama: repos namespace ## Deploy Ollama and pull the llama3.2:3b model (LLM backend for Grafana's Graft AI assistant)
+ollama: repos namespace ## Deploy Ollama and pull the llama3.2:3b model (opt-in LLM backend; set LLM_BACKEND=ollama)
 	$(call helm_install,ollama,ollama-helm/ollama,$(OLLAMA_VERSION),,$(OLLAMA_TIMEOUT))
 
 # ---- Grouped deploys ---------------------------------------------------------
@@ -249,12 +269,13 @@ backends: mimir loki tempo pyroscope ## Deploy the four LGTM backends
 stack: kube-prometheus-stack metrics-server backends grafana headlamp $(if $(filter prometheus,$(METRICS_MODE)),karma,) ## Deploy Prometheus-operator stack + metrics-server + backends + Grafana + Headlamp (+ Karma in METRICS_MODE=prometheus)
 
 .PHONY: up
-# Ollama is part of the default flow because Grafana's Graft AI assistant (and
-# the grafana-llm-app plugin it builds on — see helm/grafana/values.yaml) use it
-# as their local model backend. It's the heaviest thing in the repo (multiple
-# CPUs + several GiB of RAM for CPU-only llama3.2:3b inference, ~2GB model pull;
-# see helm/ollama/values.yaml), so expect the first `make up` to take a while.
-up: cluster stack alloy ollama validate demo ## Full setup: cluster + stack + Alloy + Ollama + validate + demo app
+# Grafana's Graft AI assistant (and the grafana-llm-app plugin it builds on —
+# see helm/grafana/values.yaml) talks to an Azure AI Foundry endpoint by
+# default, so Ollama isn't part of the default flow. In LLM_BACKEND=ollama it
+# is: Ollama is the heaviest thing in the repo (multiple CPUs + several GiB of
+# RAM for CPU-only llama3.2:3b inference, ~2GB model pull; see
+# helm/ollama/values.yaml), so expect that first `make up` to take a while.
+up: cluster stack alloy $(if $(filter ollama,$(LLM_BACKEND)),ollama,) validate demo ## Full setup: cluster + stack + Alloy + validate + demo app (+ Ollama in LLM_BACKEND=ollama)
 	@echo
 	@echo "Done. (METRICS_MODE=$(METRICS_MODE)) Grafana http://localhost:3000 (admin/admin) · Alloy http://localhost:12345 · Alertmanager http://localhost:9093 · Headlamp http://localhost:4466 · Demo UI http://localhost:8080."
 	@if [ "$(METRICS_MODE)" = "prometheus" ]; then \
@@ -262,7 +283,11 @@ up: cluster stack alloy ollama validate demo ## Full setup: cluster + stack + Al
 	else \
 		echo "Metrics: Alloy scrapes via Operator CRDs -> Mimir; Mimir's ruler evaluates PrometheusRules -> Alertmanager. View alerts in Grafana Alerting or at the Alertmanager URL above."; \
 	fi
-	@echo "AI: Grafana ships the Graft assistant (LLM plugin -> Ollama). Open Grafana and find 'Graft' in the nav."
+	@if [ "$(LLM_BACKEND)" = "ollama" ]; then \
+		echo "AI: Grafana ships the Graft assistant (LLM plugin -> Ollama). Open Grafana and find 'Graft' in the nav."; \
+	else \
+		echo "AI: Grafana ships the Graft assistant (LLM plugin -> Azure AI Foundry). Open Grafana and find 'Graft' in the nav."; \
+	fi
 
 # ---- Validation & tests ------------------------------------------------------
 .PHONY: status

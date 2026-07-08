@@ -4,6 +4,7 @@
 .idea/
 .vscode/
 .claude/
+.env
 
 # Helm/kube scratch
 *.tgz

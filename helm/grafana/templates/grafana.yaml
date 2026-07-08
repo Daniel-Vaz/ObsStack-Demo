@@ -36,8 +36,9 @@ metadata:
     {{- include "grafana.labels" . | nindent 4 }}
 data:
   {{- if .Values.llm.enabled }}
-  # Point the LLM app at this stack's in-cluster Ollama via its OpenAI-compatible
-  # API. Provider "custom" = OpenAI wire format with no API key required; the
+  # Point the LLM app at its model provider (Azure AI Foundry by default, or
+  # this stack's in-cluster Ollama in LLM_BACKEND=ollama — see values.yaml and
+  # values-ollama-llm.yaml). Provider "custom" = OpenAI wire format; the
   # plugin appends "/v1" to the url.
   grafana-llm-app.yaml: |-
     apiVersion: 1
@@ -53,6 +54,10 @@ data:
             mapping:
               base: {{ .Values.llm.model | quote }}
               large: {{ .Values.llm.model | quote }}
+        {{- if .Values.llm.apiKey }}
+        secureJsonData:
+          openAIKey: {{ .Values.llm.apiKey | quote }}
+        {{- end }}
   {{- end }}
   {{- if .Values.graft.enabled }}
   # Enable the Graft app so it's on by default (it reads its LLM backend from
@@ -136,6 +141,10 @@ spec:
               env:
                 - name: GF_INSTALL_PLUGINS
                   value: {{ join "," $plugins | quote }}
+                - name: GF_AUTH_MANAGED_SERVICE_ACCOUNTS_ENABLED
+                  value: "true"
+                - name: GF_FEATURE_TOGGLES_ENABLE
+                  value: "externalServiceAccounts"
               {{- end }}
               volumeMounts:
                 - name: sidecar-dashboards

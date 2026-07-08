@@ -53,10 +53,14 @@ Once `make` is available, run `make check-tools` to verify the rest.
 This setup uses **Podman** as the container runtime. The Makefile exports
 `KIND_EXPERIMENTAL_PROVIDER=podman` for you, so `kind` uses Podman automatically.
 
+Grafana's AI assistant talks to an Azure AI Foundry endpoint by default, so set
+`AZURE_LLM_API_KEY` in `.env` (gitignored) before `make up` if you want it
+working — see [AI assistant, in Grafana](#what-gets-deployed) below.
+
 ## Quick start
 
 ```bash
-make up      # create cluster + deploy the stack + Alloy + Ollama + validate + demo app
+make up      # create cluster + deploy the stack + Alloy + validate + demo app
 make down    # delete the cluster
 ```
 
@@ -77,10 +81,9 @@ locally controlled values files under [`helm/`](helm/).
 | Tempo     | `grafana-community/tempo`  | 2.2.3 | traces storage (single binary) | filesystem |
 | Pyroscope | `grafana/pyroscope` | 2.1.0 | profiles storage (monolithic `all` target) | filesystem |
 | Grafana Operator | `grafana/grafana-operator` | 5.24.0 | reconciles `helm/grafana`'s CRDs into a running Grafana | — |
-| Grafana   | `helm/grafana` (first-party CRs: `Grafana`, `GrafanaDatasource`) | operator-managed | provisioned datasources + Kubernetes dashboards; installs the `grafana-llm-app` + Graft AI plugins (backed by Ollama) | ephemeral |
+| Grafana   | `helm/grafana` (first-party CRs: `Grafana`, `GrafanaDatasource`) | operator-managed | provisioned datasources + Kubernetes dashboards; installs the `grafana-llm-app` + Graft AI plugins (backed by Azure AI Foundry) | ephemeral |
 | Alloy     | `grafana/alloy`  | 1.10.0 | DaemonSet collector for metrics, logs, traces, profiles, and alerting rules | — |
 | Headlamp  | `headlamp/headlamp` | 0.43.0 | in-cluster dashboard (cluster-admin, no-login demo mode) | — |
-| Ollama    | `ollama-helm/ollama` | 1.65.0 | CPU inference serving `llama3.2:3b` — model backend for Grafana's Graft AI assistant | none (re-pulled on pod start) |
 
 Alongside the stack, `make up` also builds and deploys the **OpenTelemetry demo
 app** (`otel-demo-app`) into its own `otel-demo` namespace — via plain
@@ -88,15 +91,17 @@ Kubernetes manifests rather than Helm. See [Demo application](#demo-application)
 below.
 
 **AI assistant, in Grafana.** `make up` also wires up an in-Grafana AI
-assistant with **zero external dependencies**. The Grafana chart installs two
-plugins ([`helm/grafana/values.yaml`](helm/grafana/values.yaml)): the official
-`grafana-llm-app` (pointed at the local Ollama via its OpenAI-compatible API,
-so no LLM API key is ever needed) and [**Graft**](https://github.com/vikshana/vikshana-graft-app),
-a community "AI Assistant for Grafana" app that layers a natural-language chat
-UI on top of it, using Grafana's built-in MCP tools to query your dashboards,
-metrics, logs, traces, and alerts. **Ollama** serves the `llama3.2:3b` model
-locally (the heaviest component — CPU-only inference, so expect slow
-responses). Find **Graft** in the Grafana nav at `http://localhost:3000`. See
+assistant. The Grafana chart installs two plugins
+([`helm/grafana/values.yaml`](helm/grafana/values.yaml)): the official
+`grafana-llm-app` (pointed at an **Azure AI Foundry** endpoint via its
+OpenAI-compatible API — set `AZURE_LLM_API_KEY` in `.env`) and
+[**Graft**](https://github.com/vikshana/vikshana-graft-app), a community "AI
+Assistant for Grafana" app that layers a natural-language chat UI on top of
+it, using Grafana's built-in MCP tools to query your dashboards, metrics,
+logs, traces, and alerts. Find **Graft** in the Grafana nav at
+`http://localhost:3000`. An opt-in mode swaps in a local, key-less
+[Ollama](docs/solutions/ollama.md) backend instead — see
+[docs/llm-backends.md](docs/llm-backends.md). See
 [Learn the tools](#learn-the-tools) below for the full guides.
 
 ## Exposing the UIs (NodePort + extraPortMappings)
@@ -137,6 +142,7 @@ cluster-internal — demo apps push to them via the in-cluster Service DNS.
     ├── architecture.md            # deeper design notes (the "why")
     ├── otel-instrumentation.md    # how the demo app is OTel-instrumented
     ├── metrics-modes.md           # an alternate metrics-collection mode for testing
+    ├── llm-backends.md            # an alternate AI-assistant model backend for testing
     └── solutions/                 # per-tool intro guides (start here to learn each tool)
 ```
 
@@ -153,7 +159,6 @@ for, and how it's wired in here:
 - [Pyroscope](docs/solutions/pyroscope.md) — continuous profiling
 - [Alloy](docs/solutions/alloy.md) — the collection pipeline (all four signals)
 - [Headlamp](docs/solutions/headlamp.md) — cluster UI
-- [Ollama](docs/solutions/ollama.md) — local LLM inference, the model backend for Grafana's Graft AI assistant
 - [Kind & Podman](docs/solutions/kind-and-podman.md) — the local platform
 
 ## Demo application
@@ -215,3 +220,7 @@ The demo collects metrics with Alloy by default. For an alternate
 metrics-collection mode intended for specific testing scenarios — running
 kube-prometheus-stack's own Prometheus server in the loop — see
 [docs/metrics-modes.md](docs/metrics-modes.md).
+
+Grafana's AI assistant talks to Azure AI Foundry by default. For an alternate,
+key-less model backend intended for specific testing scenarios — running
+Ollama in-cluster instead — see [docs/llm-backends.md](docs/llm-backends.md).

@@ -203,28 +203,26 @@ ConfigMap); the Operator owns the Deployment.
 - **No persistence**: dashboards/datasources are provisioned as code, so the Grafana pod
   stays intentionally ephemeral.
 
-## AI assistant: Grafana LLM plugin + Graft + Ollama
+## AI assistant: Grafana LLM plugin + Graft
 
-The demo ships an in-Grafana AI assistant that runs entirely on a local model —
-no external LLM API key. It's three pieces, all deployed by `make up`: two
-Grafana plugins installed by the [`helm/grafana`](../helm/grafana) chart, and
-[Ollama](https://github.com/otwld/ollama-helm) (`ollama-helm/ollama`) serving
-the model. See [`helm/grafana/values.yaml`](../helm/grafana/values.yaml)'s
-`llm`/`graft` blocks and [`helm/ollama/values.yaml`](../helm/ollama/values.yaml).
+The demo ships an in-Grafana AI assistant. Two Grafana plugins are installed
+by the [`helm/grafana`](../helm/grafana) chart and talk to an Azure AI Foundry
+endpoint. See [`helm/grafana/values.yaml`](../helm/grafana/values.yaml)'s
+`llm`/`graft` blocks.
 
 - [**grafana-llm-app**](https://grafana.com/grafana/plugins/grafana-llm-app/) —
   Grafana's official LLM plugin, the model gateway. It's provisioned with
-  `provider: custom` (OpenAI wire format, no API key required) pointed at
-  Ollama's OpenAI-compatible endpoint (`http://ollama.observability.svc.cluster.local:11434`,
-  the plugin appends `/v1`). Its abstract `base`/`large` model slots both map to
-  `llama3.2:3b`.
+  `provider: custom` (OpenAI wire format) pointed at Azure AI Foundry
+  (`https://dvaz-tests-resource.services.ai.azure.com/openai`, the plugin
+  appends `/v1`). Its abstract `base`/`large` model slots both map to the
+  `gpt-5.4-mini` deployment. The API key comes from `AZURE_LLM_API_KEY` in
+  `.env` (gitignored) and is delivered to the plugin via `secureJsonData`.
 - [**Graft**](https://github.com/vikshana/vikshana-graft-app)
   (`vikshana-graft-app`) — a community "AI Assistant for Grafana" app plugin
   that layers a natural-language chat UI on top of grafana-llm-app, using
   Grafana's built-in MCP tools (run in-process against the logged-in session) to
   query dashboards, metrics, logs, traces, and alerts. Find it in the Grafana
   nav at `http://localhost:3000`.
-- **Ollama** — serves `llama3.2:3b` on CPU as the model backend.
 
 How the chart wires the plugins (see
 [`templates/grafana.yaml`](../helm/grafana/templates/grafana.yaml)):
@@ -238,34 +236,19 @@ How the chart wires the plugins (see
 - **Configured via file-based plugin provisioning**: a ConfigMap
   (`grafana-plugins-provisioning`) is mounted at
   `/etc/grafana/provisioning/plugins` — the same ConfigMap mechanism the chart
-  uses for dashboards. It holds the LLM plugin's provider config and a stanza
-  that enables the Graft app by default. Both plugin blocks are gated on their
-  `enabled` values, so setting `llm.enabled: false` / `graft.enabled: false`
-  cleanly drops the env entries, the unsigned allow-list, and the provisioning.
+  uses for dashboards. It holds the LLM plugin's provider config (including the
+  API key, in `secureJsonData`) and a stanza that enables the Graft app by
+  default. Both plugin blocks are gated on their `enabled` values, so setting
+  `llm.enabled: false` / `graft.enabled: false` cleanly drops the env entries,
+  the unsigned allow-list, and the provisioning.
 - **Graft is pinned to v0.2.0**: upstream's build/publish workflow fires on
   `v*` tags, but releases are tagged `graft-v*`, so v0.2.0 is the newest tag
   that ships a prebuilt zip (the v0.3.0–v0.6.x sources have no downloadable
   artifact). Bump `graft.pluginUrl` if upstream publishes newer builds.
 
-On Ollama itself:
-
-- **Part of `make up`, but the heaviest component**: Ollama wants multiple CPUs
-  and several GiB of RAM for CPU-only `llama3.2:3b` inference (see
-  `helm/ollama/values.yaml`'s `resources`), so responses are still slow. It's
-  folded into `make up` because Graft has no backend without it.
-- **Why 3b (not a bigger model)**: `grafana-llm-app` hardcodes a 2-minute HTTP
-  timeout on its call to Ollama. On CPU an 8B model generates ~2-3 tok/s, so a
-  real Graft turn overruns that timeout and fails; `llama3.2:3b` runs ~2.4x
-  faster and stays inside it. `OLLAMA_KEEP_ALIVE=24h` keeps the model resident
-  so idle unloads don't add a cold-reload penalty.
-- **Local model, no API key**: nothing points at a hosted provider, so no
-  `OPENAI_API_KEY`-style secret exists anywhere in this demo.
-- **No persistence**: like the rest of this demo, storage is ephemeral.
-  `llama3.2:3b` (~2GB) is re-pulled by a postStart hook on every pod start; a
-  PVC wouldn't survive `make down` anyway on this kind/Podman setup. Kubernetes
-  doesn't mark the container `Running` until that hook completes, so
-  `OLLAMA_TIMEOUT` (default `20m`, see the Makefile) gives `helm --wait` much
-  more room than the default `HELM_TIMEOUT`.
+> An opt-in mode that instead points the plugin at a local, key-less
+> [Ollama](https://github.com/otwld/ollama-helm) deployment is available for
+> testing scenarios — see [llm-backends.md](./llm-backends.md).
 
 Separately, Alloy's OTLP receiver also forwards **logs** (not just traces) to
 Loki — any in-cluster workload that emits logs over OTLP (rather than only

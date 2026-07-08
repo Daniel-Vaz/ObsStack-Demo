@@ -1,16 +1,19 @@
 # Ollama
 
 **In one line:** a local server that runs open LLMs (like `llama3.2:3b`) so
-this demo needs no external AI API key.
+Grafana's AI assistant can run with no external API key.
 
 > Chart: `ollama-helm/ollama` (1.65.0) ·
 > config: [`helm/ollama/values.yaml`](../../helm/ollama/values.yaml) ·
 > access: cluster-internal only — no web UI
 
 > [!NOTE]
-> **Part of `make up`, but the heaviest component.** Ollama backs Grafana's
-> Graft AI assistant, so it's deployed by default — expect the first `make up`
-> to take a while (multiple CPUs, several GiB of RAM, ~2GB model pull).
+> **Opt-in, not deployed by default.** Grafana's Graft AI assistant talks to
+> an Azure AI Foundry endpoint by default; Ollama is an alternate, key-less
+> model backend for testing scenarios. Deploy it with
+> `make up LLM_BACKEND=ollama` — see [llm-backends.md](../llm-backends.md). It's
+> the heaviest component in the stack, so expect that first `make up` to take
+> a while (multiple CPUs, several GiB of RAM, ~2GB model pull).
 
 ## What it is
 
@@ -37,9 +40,9 @@ means an inference server:
 
 ## How we use it in this demo
 
-Ollama is deployed by `make ollama` (folded into `make up`) into the
-`observability` namespace — the same namespace as everything else in this
-demo, kept single-namespace for simplicity.
+Ollama is deployed by `make ollama` (folded into `make up LLM_BACKEND=ollama`)
+into the `observability` namespace — the same namespace as everything else in
+this demo, kept single-namespace for simplicity.
 
 - **`llama3.2:3b`, pulled at pod startup.** [`helm/ollama/values.yaml`](../../helm/ollama/values.yaml)
   lists `llama3.2:3b` under both `ollama.models.pull` and `ollama.models.run`: pulled
@@ -88,12 +91,11 @@ curl http://localhost:11434/api/generate -d '{
 ## Why it matters
 
 Wiring an AI assistant to a paid, hosted model means every run needs an API
-key and incurs a cost. A local model removes that friction entirely: `make up`
-alone gets you a working model backend, no signup, no key, no bill — so Graft
-stays true to this demo's own goal, a self-contained environment with zero
-external dependencies. The tradeoff is capability and speed (a CPU-run
-`llama3.2:3b` is slower and less capable than a frontier hosted model) — a
-fair trade for a demo.
+key and incurs a cost. A local model removes that friction entirely:
+`make up LLM_BACKEND=ollama` gets you a working model backend, no signup, no
+key, no bill — a self-contained option with zero external dependencies for
+testing scenarios where that matters. The tradeoff is capability and speed (a
+CPU-run `llama3.2:3b` is slower and less capable than a frontier hosted model).
 
 ## Learn more
 
