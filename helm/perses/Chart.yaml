@@ -1,0 +1,13 @@
+apiVersion: v2
+name: perses
+description: Perses, deployed and fully managed by the Perses Operator via CRDs
+type: application
+# Chart version is local to this repo. Requires helm/perses-operator
+# installed first (CRDs owner) — see the Makefile's `perses-operator` ->
+# `perses` ordering. Only deployed when DASHBOARD_BACKEND=perses — see
+# docs/dashboard-backends.md.
+version: 0.1.0
+home: https://github.com/perses/perses-operator
+sources:
+  - https://github.com/perses/perses-operator
+  - https://github.com/perses/community-mixins

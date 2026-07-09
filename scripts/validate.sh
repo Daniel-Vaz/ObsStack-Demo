@@ -12,6 +12,9 @@ source scripts/lib.sh
 # and Prometheus's own server doesn't run, under METRICS_MODE=alloy.
 METRICS_MODE="${METRICS_MODE:-alloy}"
 
+# grafana (default) or perses — see the Makefile and docs/dashboard-backends.md.
+DASHBOARD_BACKEND="${DASHBOARD_BACKEND:-grafana}"
+
 info "Waiting for all pods in '$NAMESPACE' to become Ready (timeout 5m)..."
 # Exclude Succeeded pods (e.g. the mimir make-minio-buckets Job) — a completed
 # pod never reports Ready, which would otherwise hang the wait until timeout.
@@ -25,7 +28,12 @@ else
 fi
 
 info "Checking helm releases are deployed..."
-releases=(kube-prometheus-stack metrics-server mimir loki tempo pyroscope grafana alloy headlamp ollama)
+releases=(kube-prometheus-stack metrics-server mimir loki tempo pyroscope alloy headlamp)
+if [[ "$DASHBOARD_BACKEND" == "perses" ]]; then
+  releases+=(perses perses-operator)
+else
+  releases+=(grafana ollama)
+fi
 [[ "$METRICS_MODE" == "prometheus" ]] && releases+=(karma)
 for r in "${releases[@]}"; do
   status="$(helm status "$r" -n "$NAMESPACE" -o json 2>/dev/null | grep -o '"status":"[^"]*"' | head -1)"
@@ -40,7 +48,7 @@ else
   FAILS=$((FAILS+1))
 fi
 
-info "Checking Grafana datasource health..."
+info "Checking $([ "$DASHBOARD_BACKEND" == "perses" ] && echo Perses || echo Grafana) datasource health..."
 grafana_datasource_health() {
   local creds="admin:admin"
   # List datasources as "uid<TAB>type" pairs, then health-check each. We need
@@ -90,12 +98,85 @@ for d in json.load(sys.stdin):
   done <<< "$pairs"
   return $rc
 }
-if ! with_port_forward svc/grafana-service 3000 -- grafana_datasource_health; then
-  FAILS=$((FAILS+1))
+
+# Perses has no Grafana-style per-datasource /health probe, so this checks
+# wiring/presence instead of a live backend ping: the four PersesGlobalDatasources
+# are visible via the API, and at least one vendored community-mixins dashboard
+# loaded into the "observability" project (see helm/perses/templates/dashboards/
+# and scripts/vendor-perses-dashboards.py — the Kubernetes namespace name maps
+# 1:1 to a Perses project, auto-created by the operator).
+#
+# Fills the caller's PERSES_NAMES/PERSES_DASHBOARD_COUNT vars; returns success
+# only once both are non-empty. Called via with_port_forward, so PF_PORT is set.
+perses_state_fetch() {
+  PERSES_NAMES="$(curl -s --max-time 5 "localhost:${PF_PORT}/api/v1/globaldatasources" \
+    | python3 -c 'import json,sys
+for d in json.load(sys.stdin):
+    print(d["metadata"]["name"])' 2>/dev/null)"
+  PERSES_DASHBOARD_COUNT="$(curl -s --max-time 5 "localhost:${PF_PORT}/api/v1/projects/${NAMESPACE}/dashboards" \
+    | python3 -c 'import json,sys; print(len(json.load(sys.stdin)))' 2>/dev/null)"
+  [[ -n "$PERSES_NAMES" && "${PERSES_DASHBOARD_COUNT:-0}" -gt 0 ]]
+}
+
+perses_datasource_health() {
+  local names="$PERSES_NAMES" dashboard_count="$PERSES_DASHBOARD_COUNT"
+  if [[ -z "$names" ]]; then fail "no global datasources returned by Perses"; return 1; fi
+  local rc=0
+  for want in prometheus-datasource loki-datasource tempo-datasource pyroscope-datasource; do
+    if grep -qx "$want" <<< "$names"; then
+      pass "datasource $want present"
+    else
+      fail "datasource $want missing from Perses"
+      rc=1
+    fi
+  done
+
+  if [[ "${dashboard_count:-0}" -gt 0 ]]; then
+    pass "$dashboard_count dashboard(s) loaded into the '$NAMESPACE' project"
+  else
+    fail "no dashboards found in the '$NAMESPACE' Perses project"
+    rc=1
+  fi
+  return $rc
+}
+
+if [[ "$DASHBOARD_BACKEND" == "perses" ]]; then
+  # The Operator syncs PersesGlobalDatasource/PersesDashboard CRs into the
+  # Perses server asynchronously — triggered by a watch on the Perses CR's
+  # own Available condition, not exposed as a condition on the datasource/
+  # dashboard CRs themselves, so there's nothing to `kubectl wait` on for
+  # "sync complete" the way the Grafana target waits for
+  # DatasourceSynchronized. By the time this runs the sync is usually done,
+  # but can lag a few seconds, so poll instead of a single check — and
+  # re-establish the port-forward tunnel on every attempt rather than trusting
+  # one to survive the whole poll window (some networks kill long-idle local
+  # port-forwards, which would otherwise look identical to Perses never syncing).
+  info "Waiting for Perses datasources/dashboards to sync..."
+  PERSES_NAMES=""; PERSES_DASHBOARD_COUNT=""
+  attempt=0
+  until with_port_forward svc/perses-nodeport 8080 -- perses_state_fetch; do
+    attempt=$((attempt+1))
+    [[ "$attempt" -ge 40 ]] && break
+    sleep 3
+  done
+  # perses_datasource_health only reads PERSES_NAMES/PERSES_DASHBOARD_COUNT
+  # (set by the polling loop above) — no more network calls, so no need to
+  # wrap it in another with_port_forward.
+  if ! perses_datasource_health; then
+    FAILS=$((FAILS+1))
+  fi
+else
+  if ! with_port_forward svc/grafana-service 3000 -- grafana_datasource_health; then
+    FAILS=$((FAILS+1))
+  fi
 fi
 
 info "Checking the NodePort-exposed UIs are reachable on the host..."
-uis=("grafana:3000" "alloy:12345" "alertmanager:9093" "headlamp:4466")
+if [[ "$DASHBOARD_BACKEND" == "perses" ]]; then
+  uis=("perses:8082" "alloy:12345" "alertmanager:9093" "headlamp:4466")
+else
+  uis=("grafana:3000" "alloy:12345" "alertmanager:9093" "headlamp:4466")
+fi
 if [[ "$METRICS_MODE" == "prometheus" ]]; then
   uis+=("prometheus:9090" "karma:8081")
 fi

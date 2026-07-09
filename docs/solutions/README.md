@@ -50,3 +50,7 @@ Read them in table order, or jump straight to whichever tool you're curious abou
 > An alternate, key-less model backend for Grafana's Graft AI assistant —
 > running [Ollama](./ollama.md) in-cluster instead of Azure AI Foundry — is
 > documented in [llm-backends.md](../llm-backends.md).
+>
+> An alternate dashboard backend for specific testing scenarios — running
+> [Perses](./perses.md) instead of Grafana — is documented in
+> [dashboard-backends.md](../dashboard-backends.md).

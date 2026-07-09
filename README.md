@@ -85,6 +85,12 @@ locally controlled values files under [`helm/`](helm/).
 | Alloy     | `grafana/alloy`  | 1.10.0 | DaemonSet collector for metrics, logs, traces, profiles, and alerting rules | — |
 | Headlamp  | `headlamp/headlamp` | 0.43.0 | in-cluster dashboard (cluster-admin, no-login demo mode) | — |
 
+>[!NOTE]
+>Grafana Operator + Grafana are deployed only in the default
+>`DASHBOARD_BACKEND=grafana` mode. An opt-in `DASHBOARD_BACKEND=perses` mode
+>swaps them for the Perses Operator + Perses instead (no LLM/Graft/Ollama) —
+>see [docs/dashboard-backends.md](docs/dashboard-backends.md).
+
 Alongside the stack, `make up` also builds and deploys the **OpenTelemetry demo
 app** (`otel-demo-app`) into its own `otel-demo` namespace — via plain
 Kubernetes manifests rather than Helm. See [Demo application](#demo-application)
@@ -143,6 +149,7 @@ cluster-internal — demo apps push to them via the in-cluster Service DNS.
     ├── otel-instrumentation.md    # how the demo app is OTel-instrumented
     ├── metrics-modes.md           # an alternate metrics-collection mode for testing
     ├── llm-backends.md            # an alternate AI-assistant model backend for testing
+    ├── dashboard-backends.md      # an alternate dashboard backend (Perses) for testing
     └── solutions/                 # per-tool intro guides (start here to learn each tool)
 ```
 
@@ -160,6 +167,7 @@ for, and how it's wired in here:
 - [Alloy](docs/solutions/alloy.md) — the collection pipeline (all four signals)
 - [Headlamp](docs/solutions/headlamp.md) — cluster UI
 - [Kind & Podman](docs/solutions/kind-and-podman.md) — the local platform
+- [Perses](docs/solutions/perses.md) — opt-in Grafana alternative
 
 ## Demo application
 
@@ -224,3 +232,8 @@ kube-prometheus-stack's own Prometheus server in the loop — see
 Grafana's AI assistant talks to Azure AI Foundry by default. For an alternate,
 key-less model backend intended for specific testing scenarios — running
 Ollama in-cluster instead — see [docs/llm-backends.md](docs/llm-backends.md).
+
+The demo visualizes everything through Grafana by default. For an alternate
+dashboard backend intended for specific testing scenarios — running
+[Perses](docs/solutions/perses.md) instead — see
+[docs/dashboard-backends.md](docs/dashboard-backends.md).

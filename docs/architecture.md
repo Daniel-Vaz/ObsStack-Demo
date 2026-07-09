@@ -203,6 +203,73 @@ ConfigMap); the Operator owns the Deployment.
 - **No persistence**: dashboards/datasources are provisioned as code, so the Grafana pod
   stays intentionally ephemeral.
 
+## Dashboard backend: Grafana vs. Perses
+
+`DASHBOARD_BACKEND=perses` (opt-in — see [dashboard-backends.md](./dashboard-backends.md))
+swaps Grafana for [Perses](https://perses.dev/), a CNCF sandbox dashboarding
+tool. The design deliberately mirrors the Grafana setup above: an Operator
+that reconciles CRDs into a running instance, rather than a values-driven
+chart.
+
+- **Same Operator/CRD shape, different vocabulary.** The
+  [Perses Operator](https://github.com/perses/perses-operator)
+  (`helm/perses-operator`, deployed by `make perses-operator`) plays the role
+  of the Grafana Operator; [`helm/perses`](../helm/perses) plays the role of
+  `helm/grafana`, rendering a `Perses` instance CR, four
+  `PersesGlobalDatasource` CRs (Mimir/Loki/Tempo/Pyroscope — the same
+  in-cluster URLs Grafana's datasources use, minus Alertmanager, which Perses
+  has no dedicated plugin for), and every vendored dashboard CR.
+- **No cert-manager dependency.** `perses-operator`'s webhook (used only for
+  the CRD's v1alpha1↔v1alpha2 conversion) normally needs cert-manager to issue
+  its TLS cert. `certManager.enable: false`
+  ([`helm/perses-operator/values.yaml`](../helm/perses-operator/values.yaml))
+  falls back to a self-signed cert the chart generates itself at install
+  time — no new cluster-wide dependency, at the cost of the CRD serving
+  without a conversion webhook. That's why every CR this repo writes for
+  Perses (datasources, dashboards) is written directly in `v1alpha2` — nothing
+  here ever relies on the operator auto-converting a `v1alpha1` object.
+- **Dashboards are vendored, not chart-bundled.** Unlike kube-prometheus-stack's
+  bundled Grafana dashboards (delivered as ConfigMaps a sidecar picks up),
+  Perses has no such delivery mechanism in this demo. Instead, every dashboard
+  under [`perses/community-mixins`](https://github.com/perses/community-mixins)'s
+  `examples/dashboards/operator/` tree is fetched at a pinned commit and
+  rewritten into [`helm/perses/templates/dashboards/`](../helm/perses/templates/dashboards/)
+  by [`scripts/vendor-perses-dashboards.py`](../scripts/vendor-perses-dashboards.py).
+  The rewrite is necessary, not cosmetic: upstream ships these as `v1alpha1`
+  objects (dashboard body directly under `spec:`), and with the conversion
+  webhook disabled (above), a `v1alpha1` object would be stored as-is under
+  the `v1alpha2` schema — which nests that same body one level deeper, under
+  `spec.config:` — and the operator would read back an empty dashboard. The
+  script also escapes any literal `{{...}}` already present in dashboard
+  content (Perses' own series-name/legend templating syntax, e.g.
+  `{{instance}}`) so Helm's Go templating doesn't try to parse it as an
+  action — only the script's own injected `{{ .Release.* }}` expressions
+  (namespace, instance-selector label) are meant to be live Helm templating.
+- **`prometheus-datasource` is a load-bearing name.** Every vendored
+  dashboard's `PrometheusTimeSeriesQuery` hardcodes
+  `datasource: {kind: PrometheusDatasource, name: prometheus-datasource}`, so
+  [`helm/perses/values.yaml`](../helm/perses/values.yaml) names the Mimir
+  `PersesGlobalDatasource` exactly `prometheus-datasource` — that's what makes
+  all 41 vendored dashboards resolve with zero per-dashboard edits.
+- **A second, hand-rolled Service for NodePort.** The `Perses` CR's own
+  `spec.service` only supports `name`/`annotations`; the Operator's own
+  generated Service is hardcoded `ClusterIP`, and its reconciler actively
+  reverts any manual patch to `Spec.Type`/`Spec.Ports` on every pass
+  (`controllers/perses/service_controller.go`'s `serviceNeedsUpdate`). So
+  [`helm/perses/templates/perses.yaml`](../helm/perses/templates/perses.yaml)
+  adds a second Service (`perses-nodeport`) selecting on the same
+  `perses-instance` label the Operator merges onto the instance's pods — the
+  Perses-side analogue of the Grafana Operator Service-merge quirk documented
+  above.
+- **Namespace maps 1:1 to a Perses "project."** The dashboard controller
+  auto-creates a Perses `Project` named after whatever Kubernetes namespace
+  the `PersesDashboard` CR lives in — so every vendored dashboard, deployed
+  into the `observability` namespace like everything else in this demo, lands
+  in an `observability` project with no separate provisioning step.
+- **No AI assistant.** Perses has no LLM/Graft-equivalent plugin in this demo,
+  so `DASHBOARD_BACKEND=perses` skips Grafana, the Grafana Operator, and
+  Ollama entirely, regardless of `LLM_BACKEND`.
+
 ## AI assistant: Grafana LLM plugin + Graft
 
 The demo ships an in-Grafana AI assistant. Two Grafana plugins are installed

@@ -1,0 +1,14 @@
+# Overlay applied on top of values.yaml only when DASHBOARD_BACKEND=perses
+# (see the Makefile and docs/dashboard-backends.md).
+#
+# values.yaml's default (`forceDeployDashboards: true`) makes KPS deploy its
+# bundled default dashboards as `grafana_dashboard: "1"` ConfigMaps even
+# though its own Grafana subchart stays disabled — helm/grafana's k8s-sidecar
+# is what actually consumes those. In Perses mode, helm/grafana isn't deployed
+# at all, so there's no sidecar to consume them and they'd just be dead
+# ConfigMaps sitting in the namespace. Perses gets its dashboards a different
+# way instead: vendored community-mixins PersesDashboard CRs (see
+# helm/perses/templates/dashboards/, produced by
+# scripts/vendor-perses-dashboards.py).
+grafana:
+  forceDeployDashboards: false

@@ -26,3 +26,7 @@ nodes:
         hostPort: 9090
       - containerPort: 30081   # Karma alert UI   -> http://localhost:8081
         hostPort: 8081
+      # Mapped for the DASHBOARD_BACKEND=perses mode (see
+      # docs/dashboard-backends.md); idle in the default (grafana) mode.
+      - containerPort: 30082   # Perses UI        -> http://localhost:8082
+        hostPort: 8082

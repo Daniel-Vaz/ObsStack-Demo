@@ -1,0 +1,271 @@
+# Vendored from perses/community-mixins @ cf419605e54868c45608cd590f47a150358da7a5
+# https://github.com/perses/community-mixins/blob/cf419605e54868c45608cd590f47a150358da7a5/examples/dashboards/operator/alertmanager/alertmanager-overview.yaml
+# Rewritten from v1alpha1 to v1alpha2 by scripts/vendor-perses-dashboards.py — do not hand-edit.
+apiVersion: perses.dev/v1alpha2
+kind: PersesDashboard
+metadata:
+  labels:
+    app.kubernetes.io/component: dashboard
+    app.kubernetes.io/instance: alertmanager-overview
+    app.kubernetes.io/name: perses-dashboard
+    app.kubernetes.io/part-of: perses-operator
+  name: alertmanager-overview
+  namespace: {{ .Release.Namespace }}
+spec:
+  instanceSelector:
+    matchLabels:
+      perses-instance: {{ .Release.Name }}
+  config:
+    display:
+      name: Alertmanager / Overview
+    duration: 1h
+    layouts:
+    - kind: Grid
+      spec:
+        display:
+          title: Alerts
+        items:
+        - content:
+            $ref: '#/spec/panels/0_0'
+          height: 8
+          width: 12
+          x: 0
+          'y': 0
+        - content:
+            $ref: '#/spec/panels/0_1'
+          height: 8
+          width: 12
+          x: 12
+          'y': 0
+    - kind: Grid
+      spec:
+        display:
+          title: Notifications
+        items:
+        - content:
+            $ref: '#/spec/panels/1_0'
+          height: 8
+          width: 12
+          x: 0
+          'y': 0
+        - content:
+            $ref: '#/spec/panels/1_1'
+          height: 8
+          width: 12
+          x: 12
+          'y': 0
+    panels:
+      '0_0':
+        kind: Panel
+        spec:
+          display:
+            description: Shows current alerts in Alertmanager
+            name: Alerts
+          plugin:
+            kind: TimeSeriesChart
+            spec:
+              legend:
+                mode: table
+                position: bottom
+                values:
+                - last
+              visual:
+                areaOpacity: 1
+                display: line
+                lineWidth: 0.25
+                palette:
+                  mode: auto
+          queries:
+          - kind: TimeSeriesQuery
+            spec:
+              plugin:
+                kind: PrometheusTimeSeriesQuery
+                spec:
+                  datasource:
+                    kind: PrometheusDatasource
+                    name: prometheus-datasource
+                  query: sum by (instance) (alertmanager_alerts{job=~"$job"})
+                  seriesNameFormat: '{{"{{"}}instance{{"}}"}} - Alertmanager - Alerts'
+      '0_1':
+        kind: Panel
+        spec:
+          display:
+            description: Shows alert receive rate in Alertmanager
+            name: Alerts receive rate
+          plugin:
+            kind: TimeSeriesChart
+            spec:
+              legend:
+                mode: table
+                position: bottom
+                values:
+                - last
+              visual:
+                areaOpacity: 1
+                display: line
+                lineWidth: 0.25
+                palette:
+                  mode: auto
+                stack: all
+          queries:
+          - kind: TimeSeriesQuery
+            spec:
+              plugin:
+                kind: PrometheusTimeSeriesQuery
+                spec:
+                  datasource:
+                    kind: PrometheusDatasource
+                    name: prometheus-datasource
+                  query: sum by (job, instance) (rate(alertmanager_alerts_received_total{job=~"$job"}[$__rate_interval]))
+                  seriesNameFormat: '{{"{{"}}instance{{"}}"}} - Alertmanager - Received'
+          - kind: TimeSeriesQuery
+            spec:
+              plugin:
+                kind: PrometheusTimeSeriesQuery
+                spec:
+                  datasource:
+                    kind: PrometheusDatasource
+                    name: prometheus-datasource
+                  query: sum by (job, instance) (rate(alertmanager_alerts_invalid_total{job=~"$job"}[$__rate_interval]))
+                  seriesNameFormat: '{{"{{"}}instance{{"}}"}} - Alertmanager - Invalid'
+      '1_0':
+        kind: Panel
+        spec:
+          display:
+            description: Shows notification send rate for the Alertmanager
+            name: Notifications Send Rate
+          plugin:
+            kind: TimeSeriesChart
+            spec:
+              legend:
+                mode: table
+                position: bottom
+                values:
+                - last
+              visual:
+                areaOpacity: 1
+                display: line
+                lineWidth: 0.25
+                palette:
+                  mode: auto
+                stack: all
+          queries:
+          - kind: TimeSeriesQuery
+            spec:
+              plugin:
+                kind: PrometheusTimeSeriesQuery
+                spec:
+                  datasource:
+                    kind: PrometheusDatasource
+                    name: prometheus-datasource
+                  query: "sum by (integration, instance) (\n  rate(alertmanager_notifications_total{integration=~\"\
+                    $integration\",job=~\"$job\"}[$__rate_interval])\n)"
+                  seriesNameFormat: '{{"{{"}}instance{{"}}"}} - {{"{{"}}integration{{"}}"}} - Total'
+          - kind: TimeSeriesQuery
+            spec:
+              plugin:
+                kind: PrometheusTimeSeriesQuery
+                spec:
+                  datasource:
+                    kind: PrometheusDatasource
+                    name: prometheus-datasource
+                  query: "sum by (integration, instance) (\n  rate(\n    alertmanager_notifications_failed_total{integration=~\"\
+                    $integration\",job=~\"$job\"}[$__rate_interval]\n  )\n)"
+                  seriesNameFormat: '{{"{{"}}instance{{"}}"}} - {{"{{"}}integration{{"}}"}} - Failed'
+      '1_1':
+        kind: Panel
+        spec:
+          display:
+            description: Shows notification latency for the Alertmanager
+            name: Notification Duration
+          plugin:
+            kind: TimeSeriesChart
+            spec:
+              legend:
+                mode: table
+                position: bottom
+                values:
+                - last
+              visual:
+                areaOpacity: 0.5
+                display: line
+                lineWidth: 0.25
+                palette:
+                  mode: auto
+              yAxis:
+                format:
+                  unit: seconds
+          queries:
+          - kind: TimeSeriesQuery
+            spec:
+              plugin:
+                kind: PrometheusTimeSeriesQuery
+                spec:
+                  datasource:
+                    kind: PrometheusDatasource
+                    name: prometheus-datasource
+                  query: "histogram_quantile(\n  0.99,\n  sum by (le, integration, instance) (\n    rate(\n\
+                    \      alertmanager_notification_latency_seconds_bucket{integration=~\"$integration\"\
+                    ,job=~\"$job\"}[$__rate_interval]\n    )\n  )\n)"
+                  seriesNameFormat: '{{"{{"}}instance{{"}}"}} - {{"{{"}}integration{{"}}"}} - 99th Percentile'
+          - kind: TimeSeriesQuery
+            spec:
+              plugin:
+                kind: PrometheusTimeSeriesQuery
+                spec:
+                  datasource:
+                    kind: PrometheusDatasource
+                    name: prometheus-datasource
+                  query: "histogram_quantile(\n  0.5,\n  sum by (le, integration, instance) (\n    rate(\n\
+                    \      alertmanager_notification_latency_seconds_bucket{integration=~\"$integration\"\
+                    ,job=~\"$job\"}[$__rate_interval]\n    )\n  )\n)"
+                  seriesNameFormat: '{{"{{"}}instance{{"}}"}} - {{"{{"}}integration{{"}}"}} - Median'
+          - kind: TimeSeriesQuery
+            spec:
+              plugin:
+                kind: PrometheusTimeSeriesQuery
+                spec:
+                  datasource:
+                    kind: PrometheusDatasource
+                    name: prometheus-datasource
+                  query: "  sum by (integration, instance) (\n    rate(\n      alertmanager_notification_latency_seconds_sum{integration=~\"\
+                    $integration\",job=~\"$job\"}[$__rate_interval]\n    )\n  )\n/\n  sum by (integration,\
+                    \ instance) (\n    rate(\n      alertmanager_notification_latency_seconds_count{integration=~\"\
+                    $integration\",job=~\"$job\"}[$__rate_interval]\n    )\n  )"
+                  seriesNameFormat: '{{"{{"}}instance{{"}}"}} - {{"{{"}}integration{{"}}"}} - Average'
+    variables:
+    - kind: ListVariable
+      spec:
+        allowAllValue: false
+        allowMultiple: false
+        display:
+          hidden: false
+          name: job
+        name: job
+        plugin:
+          kind: PrometheusLabelValuesVariable
+          spec:
+            datasource:
+              kind: PrometheusDatasource
+              name: prometheus-datasource
+            labelName: job
+            matchers:
+            - alertmanager_alerts{}
+    - kind: ListVariable
+      spec:
+        allowAllValue: true
+        allowMultiple: true
+        display:
+          hidden: false
+          name: integration
+        name: integration
+        plugin:
+          kind: PrometheusLabelValuesVariable
+          spec:
+            datasource:
+              kind: PrometheusDatasource
+              name: prometheus-datasource
+            labelName: integration
+            matchers:
+            - alertmanager_notifications_total{job="$job"}
+status: {}

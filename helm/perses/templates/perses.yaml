@@ -1,0 +1,60 @@
+apiVersion: perses.dev/v1alpha2
+kind: Perses
+metadata:
+  name: {{ include "perses.fullname" . }}
+  # instanceSelector on PersesGlobalDatasource/PersesDashboard (and on the
+  # Perses List call the operator's datasource/dashboard controllers make)
+  # matches against this top-level metadata.labels — a *different* mechanism
+  # from spec.metadata.labels below, which the operator instead propagates
+  # onto the Deployment/pods/Service it generates for this instance. Both are
+  # needed: this one for CRs to find "their" instance, spec.metadata.labels
+  # for our NodePort Service/ServiceMonitor to find the generated pods.
+  labels:
+    {{- include "perses.labels" . | nindent 4 }}
+    {{- include "perses.instanceSelectorLabels" . | nindent 4 }}
+spec:
+  image: {{ .Values.image | quote }}
+  containerPort: {{ .Values.containerPort }}
+  metadata:
+    labels:
+      {{- include "perses.instanceSelectorLabels" . | nindent 6 }}
+  config:
+    # File-based storage, ephemeral (no PVC) — same "no persistence, dashboards
+    # provisioned as code" posture this repo already documents for Grafana.
+    # Dashboards/datasources arrive as CRs (templates/dashboards/,
+    # templates/datasources.yaml), so nothing here needs to survive a restart.
+    database:
+      file:
+        folder: /perses
+        extension: yaml
+  resources:
+    {{- toYaml .Values.resources | nindent 4 }}
+---
+# The Operator's own generated Service (named after the Perses CR above) is
+# hardcoded ClusterIP — the CRD's spec.service only exposes name/annotations,
+# not type/nodePort, and the reconciler actively reverts any manual patch to
+# Spec.Type/Spec.Ports on every reconcile (controllers/perses/service_controller.go's
+# serviceNeedsUpdate). So expose the UI with a second, separate Service here
+# instead of trying to patch the Operator's — the Perses-side analogue of the
+# Grafana Operator Service quirk documented in docs/architecture.md.
+#
+# Selector: the Operator merges spec.metadata.labels (set above) onto every
+# Deployment/pod/Service it generates for this instance (see
+# internal/perses/common/labels.go's LabelsForPerses), so selecting on that
+# same custom label reliably targets this instance's pods.
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "perses.fullname" . }}-nodeport
+  labels:
+    {{- include "perses.labels" . | nindent 4 }}
+spec:
+  type: NodePort
+  selector:
+    {{- include "perses.instanceSelectorLabels" . | nindent 4 }}
+  ports:
+    - name: http
+      protocol: TCP
+      port: {{ .Values.containerPort }}
+      targetPort: {{ .Values.containerPort }}
+      nodePort: {{ .Values.service.nodePort }}

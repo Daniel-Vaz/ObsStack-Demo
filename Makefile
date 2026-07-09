@@ -42,6 +42,38 @@ ALLOY_EXTRA_VALUES   := $(if $(filter prometheus,$(METRICS_MODE)),--values $(HEL
 MIMIR_EXTRA_VALUES   := $(if $(filter prometheus,$(METRICS_MODE)),--values $(HELM_DIR)/mimir/values-prometheus-metrics.yaml,)
 GRAFANA_EXTRA_VALUES := $(if $(filter prometheus,$(METRICS_MODE)),--values $(HELM_DIR)/grafana/values-prometheus-metrics.yaml,)
 
+# ---- Dashboard/visualization backend ------------------------------------------
+# grafana (default): Grafana (Operator-managed, see helm/grafana), with the
+#           grafana-llm-app + Graft AI plugins and kube-prometheus-stack's
+#           bundled default dashboards (force-deployed as ConfigMaps and
+#           picked up by Grafana's k8s-sidecar).
+# perses:   an opt-in alternative that swaps Grafana out for Perses
+#           (Operator-managed, see helm/perses) instead. No Grafana, no LLM/
+#           Graft/Ollama (Perses has no AI-assistant plugin in this demo), and
+#           kube-prometheus-stack stops force-deploying its dashboard
+#           ConfigMaps (nothing would consume them). Dashboards instead come
+#           from perses/community-mixins, vendored as PersesDashboard CRs
+#           (helm/perses/templates/dashboards/, see
+#           scripts/vendor-perses-dashboards.py). See docs/dashboard-backends.md.
+# Toggle with: make up DASHBOARD_BACKEND=perses
+#
+# Unlike METRICS_MODE/LLM_BACKEND, which are values-overlays on the *same*
+# Helm release, Grafana and Perses are two entirely separate releases — so
+# switching DASHBOARD_BACKEND on a cluster that's already up needs `make
+# clean` first (or a fresh `make down && make up`), or you end up with both
+# stacks installed side by side.
+DASHBOARD_BACKEND ?= grafana
+ifeq ($(filter $(DASHBOARD_BACKEND),grafana perses),)
+$(error DASHBOARD_BACKEND must be 'grafana' or 'perses', got '$(DASHBOARD_BACKEND)')
+endif
+
+# Layered alongside KPS_EXTRA_VALUES above — both overlays can apply at once
+# (e.g. METRICS_MODE=prometheus DASHBOARD_BACKEND=perses is valid).
+KPS_PERSES_VALUES := $(if $(filter perses,$(DASHBOARD_BACKEND)),--values $(HELM_DIR)/kube-prometheus-stack/values-perses-dashboards.yaml,)
+
+# Which deploy targets `stack` (below) chains in for the dashboard layer.
+DASHBOARD_BACKEND_TARGETS := $(if $(filter perses,$(DASHBOARD_BACKEND)),perses-operator perses,grafana-operator grafana)
+
 # ---- AI assistant LLM backend -------------------------------------------------
 # azure  (default): Grafana's LLM plugin (and the Graft assistant built on it)
 #        talk to an Azure AI Foundry endpoint. Needs AZURE_LLM_API_KEY set in
@@ -60,6 +92,11 @@ endif
 # Overlay applied only in LLM_BACKEND=ollama, swapping the `llm` block in
 # helm/grafana/values.yaml over to this stack's in-cluster Ollama.
 LLM_EXTRA_VALUES := $(if $(filter ollama,$(LLM_BACKEND)),--values $(HELM_DIR)/grafana/values-ollama-llm.yaml,)
+
+# Ollama is only ever relevant in Grafana mode — Perses has no LLM/AI-assistant
+# plugin in this demo, so `up` (below) skips deploying it there even if
+# LLM_BACKEND=ollama is also set.
+OLLAMA_TARGET := $(if $(filter ollama,$(LLM_BACKEND)),$(if $(filter grafana,$(DASHBOARD_BACKEND)),ollama,),)
 
 # ---- Demo application (apps/otel-demo) ----------------------------------------
 # An OTel-instrumented Go microservices app that feeds the stack's own
@@ -89,6 +126,7 @@ LOKI_VERSION           := 7.0.0
 TEMPO_VERSION          := 2.2.3
 PYROSCOPE_VERSION      := 2.1.0
 GRAFANA_OPERATOR_VERSION := 5.24.0
+PERSES_OPERATOR_VERSION := 0.4.0
 ALLOY_VERSION          := 1.10.0
 KPS_VERSION            := 87.5.1
 HEADLAMP_VERSION       := 0.43.0
@@ -152,14 +190,15 @@ cluster: check-tools ## Create the kind cluster (no-op if it exists)
 	@kubectl cluster-info --context kind-$(CLUSTER_NAME) >/dev/null && echo "Cluster ready."
 
 .PHONY: repos
-repos: ## Add and update the Grafana + Prometheus + Ollama helm repos
+repos: ## Add and update the Grafana + Prometheus + Ollama + Perses helm repos
 	@helm repo add grafana https://grafana.github.io/helm-charts >/dev/null
 	@helm repo add grafana-community https://grafana-community.github.io/helm-charts >/dev/null
 	@helm repo add prometheus-community https://prometheus-community.github.io/helm-charts >/dev/null
 	@helm repo add headlamp https://kubernetes-sigs.github.io/headlamp/ >/dev/null
 	@helm repo add ollama-helm https://otwld.github.io/ollama-helm/ >/dev/null
 	@helm repo add metrics-server https://kubernetes-sigs.github.io/metrics-server/ >/dev/null
-	@helm repo update grafana grafana-community prometheus-community headlamp ollama-helm metrics-server >/dev/null
+	@helm repo add perses https://perses.github.io/helm-charts >/dev/null
+	@helm repo update grafana grafana-community prometheus-community headlamp ollama-helm metrics-server perses >/dev/null
 	@echo "Helm repos up to date."
 
 .PHONY: namespace
@@ -167,10 +206,10 @@ namespace: ## Ensure the target namespace exists
 	@kubectl get namespace $(NAMESPACE) >/dev/null 2>&1 || kubectl create namespace $(NAMESPACE)
 
 # ---- Individual component deploys --------------------------------------------
-.PHONY: kube-prometheus-stack mimir loki tempo pyroscope grafana-operator grafana alloy headlamp karma ollama metrics-server
+.PHONY: kube-prometheus-stack mimir loki tempo pyroscope grafana-operator grafana perses-operator perses alloy headlamp karma ollama metrics-server
 
 kube-prometheus-stack: repos namespace ## Deploy kube-prometheus-stack (Alertmanager, operator, KSM, node-exporter; + Prometheus in METRICS_MODE=prometheus)
-	$(call helm_install,kube-prometheus-stack,prometheus-community/kube-prometheus-stack,$(KPS_VERSION),$(KPS_EXTRA_VALUES))
+	$(call helm_install,kube-prometheus-stack,prometheus-community/kube-prometheus-stack,$(KPS_VERSION),$(KPS_EXTRA_VALUES) $(KPS_PERSES_VALUES))
 
 metrics-server: repos namespace ## Deploy metrics-server (kubelet resource metrics for `kubectl top`/HPA; scraped via its built-in ServiceMonitor)
 	$(call helm_install,metrics-server,metrics-server/metrics-server,$(METRICS_SERVER_VERSION))
@@ -231,6 +270,34 @@ grafana: namespace grafana-operator ## Deploy Grafana (Operator-managed via CRDs
 		-l app.kubernetes.io/instance=grafana grafanadatasources.grafana.integreatly.org \
 		-n $(NAMESPACE) --timeout=$(HELM_TIMEOUT)
 
+perses-operator: repos namespace ## Deploy the Perses Operator (reconciles helm/perses's CRDs into a running Perses) [DASHBOARD_BACKEND=perses]
+	$(call helm_install,perses-operator,perses/perses-operator,$(PERSES_OPERATOR_VERSION))
+
+perses: namespace perses-operator ## Deploy Perses (Operator-managed via CRDs; provisioned datasources + community-mixins dashboards) [DASHBOARD_BACKEND=perses]
+	@# First-party local chart (helm/perses) of CRDs (Perses, PersesGlobalDatasource,
+	@# PersesDashboard, ...) — no external repo, so it skips `repos` and passes a
+	@# chart path instead of a repo/chart ref. Same retry loop as helm_install,
+	@# minus the --version flag (invalid for local paths).
+	@for attempt in 1 2 3; do \
+		echo ">> perses: helm upgrade --install (attempt $$attempt)"; \
+		helm upgrade --install perses $(HELM_DIR)/perses \
+			--namespace $(NAMESPACE) --create-namespace \
+			--values $(HELM_DIR)/perses/values.yaml \
+			--wait --timeout $(HELM_TIMEOUT) && break; \
+		if [ $$attempt -eq 3 ]; then \
+			echo ">> perses: still not ready after $$attempt attempts" >&2; exit 1; \
+		fi; \
+		echo ">> perses: transient failure, retrying in 15s..."; \
+		sleep 15; \
+	done
+	@# helm --wait only tracks the objects this chart applies directly (the
+	@# NodePort Service, ServiceMonitor) — it has no notion of the Perses CR's
+	@# own readiness. Unlike the Grafana CR, the Perses CR does expose an
+	@# "Available" status condition directly, so wait on that rather than
+	@# polling for a generated Deployment to exist first.
+	@echo ">> perses: waiting for the Perses Operator to reconcile the instance..."
+	@kubectl wait --for=condition=Available perses.perses.dev/perses -n $(NAMESPACE) --timeout=$(HELM_TIMEOUT)
+
 alloy: repos namespace ## Deploy Alloy (telemetry collector; scrapes metrics too in default METRICS_MODE=alloy)
 	$(call helm_install,alloy,grafana/alloy,$(ALLOY_VERSION),$(ALLOY_EXTRA_VALUES))
 
@@ -266,7 +333,9 @@ backends: mimir loki tempo pyroscope ## Deploy the four LGTM backends
 # Alertmanager that Karma / Mimir's ruler fires to.
 # Karma is only deployed in the METRICS_MODE=prometheus mode — in the default
 # alloy mode, Grafana Alerting (via the Mimir datasource) covers that role.
-stack: kube-prometheus-stack metrics-server backends grafana headlamp $(if $(filter prometheus,$(METRICS_MODE)),karma,) ## Deploy Prometheus-operator stack + metrics-server + backends + Grafana + Headlamp (+ Karma in METRICS_MODE=prometheus)
+# The dashboard layer is Grafana+Operator by default, or Perses+Operator in
+# DASHBOARD_BACKEND=perses — see DASHBOARD_BACKEND_TARGETS above.
+stack: kube-prometheus-stack metrics-server backends $(DASHBOARD_BACKEND_TARGETS) headlamp $(if $(filter prometheus,$(METRICS_MODE)),karma,) ## Deploy Prometheus-operator stack + metrics-server + backends + Grafana/Perses + Headlamp (+ Karma in METRICS_MODE=prometheus)
 
 .PHONY: up
 # Grafana's Graft AI assistant (and the grafana-llm-app plugin it builds on —
@@ -275,15 +344,22 @@ stack: kube-prometheus-stack metrics-server backends grafana headlamp $(if $(fil
 # is: Ollama is the heaviest thing in the repo (multiple CPUs + several GiB of
 # RAM for CPU-only llama3.2:3b inference, ~2GB model pull; see
 # helm/ollama/values.yaml), so expect that first `make up` to take a while.
-up: cluster stack alloy $(if $(filter ollama,$(LLM_BACKEND)),ollama,) validate demo ## Full setup: cluster + stack + Alloy + validate + demo app (+ Ollama in LLM_BACKEND=ollama)
+# (Perses mode never deploys Ollama — see OLLAMA_TARGET above.)
+up: cluster stack alloy $(OLLAMA_TARGET) validate demo ## Full setup: cluster + stack + Alloy + validate + demo app (+ Ollama in LLM_BACKEND=ollama, Grafana mode only)
 	@echo
-	@echo "Done. (METRICS_MODE=$(METRICS_MODE)) Grafana http://localhost:3000 (admin/admin) · Alloy http://localhost:12345 · Alertmanager http://localhost:9093 · Headlamp http://localhost:4466 · Demo UI http://localhost:8080."
+	@if [ "$(DASHBOARD_BACKEND)" = "perses" ]; then \
+		echo "Done. (METRICS_MODE=$(METRICS_MODE)) Perses http://localhost:8082 · Alloy http://localhost:12345 · Alertmanager http://localhost:9093 · Headlamp http://localhost:4466 · Demo UI http://localhost:8080."; \
+	else \
+		echo "Done. (METRICS_MODE=$(METRICS_MODE)) Grafana http://localhost:3000 (admin/admin) · Alloy http://localhost:12345 · Alertmanager http://localhost:9093 · Headlamp http://localhost:4466 · Demo UI http://localhost:8080."; \
+	fi
 	@if [ "$(METRICS_MODE)" = "prometheus" ]; then \
 		echo "Prometheus http://localhost:9090 · Karma http://localhost:8081."; \
 	else \
-		echo "Metrics: Alloy scrapes via Operator CRDs -> Mimir; Mimir's ruler evaluates PrometheusRules -> Alertmanager. View alerts in Grafana Alerting or at the Alertmanager URL above."; \
+		echo "Metrics: Alloy scrapes via Operator CRDs -> Mimir; Mimir's ruler evaluates PrometheusRules -> Alertmanager. View alerts in Grafana Alerting (Grafana mode) or at the Alertmanager URL above."; \
 	fi
-	@if [ "$(LLM_BACKEND)" = "ollama" ]; then \
+	@if [ "$(DASHBOARD_BACKEND)" = "perses" ]; then \
+		echo "Dashboards: perses/community-mixins, vendored as PersesDashboard CRs. No AI assistant in Perses mode."; \
+	elif [ "$(LLM_BACKEND)" = "ollama" ]; then \
 		echo "AI: Grafana ships the Graft assistant (LLM plugin -> Ollama). Open Grafana and find 'Graft' in the nav."; \
 	else \
 		echo "AI: Grafana ships the Graft assistant (LLM plugin -> Azure AI Foundry). Open Grafana and find 'Graft' in the nav."; \
@@ -297,12 +373,16 @@ status: ## Show pods and helm releases in the namespace
 
 .PHONY: validate
 validate: ## Check that all workloads are ready and datasources are healthy
-	@NAMESPACE=$(NAMESPACE) METRICS_MODE=$(METRICS_MODE) ./scripts/validate.sh
+	@NAMESPACE=$(NAMESPACE) METRICS_MODE=$(METRICS_MODE) DASHBOARD_BACKEND=$(DASHBOARD_BACKEND) ./scripts/validate.sh
 
 # ---- Access helpers ----------------------------------------------------------
 .PHONY: grafana-ui
-grafana-ui: ## Show the Grafana URL (admin/admin)
+grafana-ui: ## Show the Grafana URL (admin/admin) [DASHBOARD_BACKEND=grafana]
 	@echo "Grafana at http://localhost:3000 (admin/admin)."
+
+.PHONY: perses-ui
+perses-ui: ## Show the Perses URL [DASHBOARD_BACKEND=perses]
+	@echo "Perses at http://localhost:8082."
 
 .PHONY: alloy-ui
 alloy-ui: ## Show the Alloy UI URL
@@ -337,11 +417,11 @@ logs-alloy: ## Tail Alloy logs
 
 # ---- Teardown ----------------------------------------------------------------
 .PHONY: clean
-clean: ## Uninstall all helm releases (keep the cluster)
-	-@for r in ollama karma headlamp alloy grafana grafana-operator pyroscope tempo loki mimir metrics-server kube-prometheus-stack; do \
+clean: ## Uninstall all helm releases (keep the cluster) — also use this before switching DASHBOARD_BACKEND
+	-@for r in ollama karma headlamp alloy grafana grafana-operator perses perses-operator pyroscope tempo loki mimir metrics-server kube-prometheus-stack; do \
 		helm uninstall $$r -n $(NAMESPACE) 2>/dev/null || true; \
 	done
-	@echo "Releases removed. (Prometheus-operator + Grafana Operator CRDs are left in place; kind delete removes them.)"
+	@echo "Releases removed. (Prometheus-operator + Grafana/Perses Operator CRDs are left in place; kind delete removes them.)"
 
 .PHONY: down
 down: ## Delete the kind cluster

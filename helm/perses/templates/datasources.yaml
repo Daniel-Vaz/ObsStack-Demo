@@ -1,0 +1,32 @@
+{{- range .Values.datasources }}
+---
+apiVersion: perses.dev/v1alpha2
+kind: PersesGlobalDatasource
+metadata:
+  name: {{ .name }}
+  labels:
+    {{- include "perses.labels" $ | nindent 4 }}
+spec:
+  instanceSelector:
+    matchLabels:
+      {{- include "perses.instanceSelectorLabels" $ | nindent 6 }}
+  config:
+    display:
+      name: {{ .name }}
+    default: true
+    plugin:
+      kind: {{ .pluginKind }}
+      spec:
+        # proxy (not directUrl): these are cluster-internal Service DNS names,
+        # reachable only from the Perses server, not from the browser. proxy
+        # routes queries through the Perses backend (GET/POST
+        # /proxy/globaldatasources/<name>/...), the same role Grafana's
+        # hardcoded `access: proxy` plays for its own datasources (see
+        # helm/grafana/templates/datasources.yaml). directUrl instead tells
+        # the *browser* to call the URL directly — fine for a publicly
+        # reachable endpoint, not for these.
+        proxy:
+          kind: HTTPProxy
+          spec:
+            url: {{ .url }}
+{{- end }}

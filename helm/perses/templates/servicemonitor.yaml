@@ -1,0 +1,18 @@
+# Emit a ServiceMonitor so the metrics collector (Alloy by default, or
+# kube-prometheus-stack's Prometheus in the METRICS_MODE=prometheus mode)
+# scrapes Perses (Perses serves /metrics on its HTTP port). Targets the
+# Operator's own generated Service (named after the Perses CR, port "http" —
+# see templates/perses.yaml), not the hand-rolled NodePort one.
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "perses.fullname" . }}
+  labels:
+    {{- include "perses.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "perses.instanceSelectorLabels" . | nindent 6 }}
+  endpoints:
+    - port: http
+      path: /metrics
