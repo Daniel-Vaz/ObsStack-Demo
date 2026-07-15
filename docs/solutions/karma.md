@@ -1,7 +1,7 @@
 # Karma
 
 **In one line:** a clean, groupable dashboard for your Prometheus
-**Alertmanager** — every firing, silenced, and inhibited alert in a single view.
+**Alertmanager** - every firing, silenced, and inhibited alert in a single view.
 
 > Chart: `helm/karma` (first-party, appVersion v0.131) ·
 > config: [`helm/karma/values.yaml`](../../helm/karma/values.yaml) ·
@@ -24,11 +24,11 @@ by label, colour-coded by severity, with fast filtering, multi-Alertmanager
 aggregation, and silence management from the browser.
 
 ![Alertmanager's own bare-bones web UI showing a single Watchdog alert with its label matchers](../images/alertmanager-ui.png)
-*Alertmanager's built-in UI at `http://localhost:9093` — functional but plain, showing the always-on `Watchdog` alert. Karma renders this same data with grouping, severity colours, and filtering.*
+*Alertmanager's built-in UI at `http://localhost:9093` - functional but plain, showing the always-on `Watchdog` alert. Karma renders this same data with grouping, severity colours, and filtering.*
 
 Crucially, Karma is a **consumer of Alertmanager, not a receiver.** It *polls
 Alertmanager's HTTP API* on an interval and renders whatever it finds.
-Alertmanager never pushes to it — there is no "send alerts to Karma" step.
+Alertmanager never pushes to it - there is no "send alerts to Karma" step.
 
 ## Where it fits among the others
 
@@ -55,9 +55,9 @@ prerequisites in that mode) into the `observability` namespace, exposed on
 
 - **Points at the in-cluster Alertmanager.**
   [`helm/karma/values.yaml`](../../helm/karma/values.yaml) configures one
-  Alertmanager server —
+  Alertmanager server -
   `http://kube-prometheus-stack-alertmanager.observability.svc.cluster.local:9093`
-  — with `proxy: true`, so Karma's pod reaches Alertmanager on the browser's
+  - with `proxy: true`, so Karma's pod reaches Alertmanager on the browser's
   behalf (the browser can't resolve in-cluster Service DNS).
 - **Sees *all* alerts by default.** Karma only shows what Alertmanager holds, so
   this demo configures a single **catch-all route** in
@@ -65,15 +65,15 @@ prerequisites in that mode) into the `observability` namespace, exposed on
   The stock kube-prometheus-stack config funnels everything into a `null`
   receiver and carves out a separate Watchdog route; we collapse that into one
   `catch-all` receiver so **no alert is dropped or filtered before it reaches
-  Alertmanager's store** — and therefore Karma. Every severity, every
+  Alertmanager's store** - and therefore Karma. Every severity, every
   namespace, including the always-firing `Watchdog` heartbeat.
-- **Stateless.** No persistence — it re-derives everything from Alertmanager on
+- **Stateless.** No persistence - it re-derives everything from Alertmanager on
   each poll (default every 60s).
 
 ## Try it
 
 ![Karma dashboard at localhost:8081 showing Watchdog and PrometheusRemoteStorageFailures alerts as rich, colour-coded cards with expanded labels and annotations](../images/karma-ui.png)
-*The same alerts in Karma at `http://localhost:8081` — each grouped into a colour-coded card with its full labels, description, summary, and runbook link laid out for fast triage. Compare with Alertmanager's plainer list above.*
+*The same alerts in Karma at `http://localhost:8081` - each grouped into a colour-coded card with its full labels, description, summary, and runbook link laid out for fast triage. Compare with Alertmanager's plainer list above.*
 
 - Open `http://localhost:8081`. Out of the box you'll see at least the
   **`Watchdog`** alert (kube-prometheus-stack's always-on heartbeat) and any
@@ -81,7 +81,7 @@ prerequisites in that mode) into the `observability` namespace, exposed on
 - Group and filter: use the search bar to filter by label
   (e.g. `alertname=Watchdog`, `severity=warning`, `namespace=observability`).
 - Create a **silence** from a Karma alert, then watch it move into the silenced
-  view — and confirm it also appears in Alertmanager at
+  view - and confirm it also appears in Alertmanager at
   `http://localhost:9093`.
 
 ## Why it matters
@@ -89,11 +89,11 @@ prerequisites in that mode) into the `observability` namespace, exposed on
 Alerting is only useful if a human can quickly make sense of it. During an
 incident, dozens of related alerts fire at once; Alertmanager's own UI makes
 that hard to scan. Karma's grouping and filtering turn a wall of alerts into a
-readable picture of **what's broken and what's already handled** — the
+readable picture of **what's broken and what's already handled** - the
 triage-friendly front door to your alerting pipeline.
 
 ## Learn more
 
 - [Karma on GitHub](https://github.com/prymitive/karma)
 - [Alertmanager docs](https://prometheus.io/docs/alerting/latest/alertmanager/)
-- [Kube-Prometheus-Stack guide](./kube-prometheus-stack.md) — where the alerts come from
+- [Kube-Prometheus-Stack guide](./kube-prometheus-stack.md) - where the alerts come from

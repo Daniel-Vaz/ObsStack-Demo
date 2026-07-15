@@ -1,7 +1,7 @@
 # Tempo
 
 **In one line:** a distributed tracing backend that's cheap enough to keep
-**every** trace, because it only needs object storage — no big index.
+**every** trace, because it only needs object storage - no big index.
 
 > Chart: `grafana-community/tempo` (v2.2.3, single binary mode) ·
 > config: [`helm/tempo/values.yaml`](../../helm/tempo/values.yaml) ·
@@ -27,7 +27,7 @@ systems, so you can sample 100% instead of throwing traces away.
 - **OTLP native.** Tempo ingests **OpenTelemetry (OTLP)** and other common trace
   protocols, so any OTel-instrumented app can send to it.
 - **Correlation over search.** The intended workflow is to *arrive* at a trace
-  from a metric exemplar or a log's `trace_id`, rather than full-text searching —
+  from a metric exemplar or a log's `trace_id`, rather than full-text searching -
   though it supports **TraceQL** for querying too.
 - **Metrics from traces.** Tempo can generate **span metrics** and
   **service-graph** data, written to a metrics store like [Mimir](./mimir.md).
@@ -37,7 +37,7 @@ systems, so you can sample 100% instead of throwing traces away.
 Tempo is the **store for traces.** The demo app exports spans over **OTLP/gRPC**
 to [Alloy](./alloy.md), which forwards them to Tempo.
 
-- Runs in **single-binary (monolithic) mode** with **filesystem** storage — one
+- Runs in **single-binary (monolithic) mode** with **filesystem** storage - one
   pod, laptop-friendly.
 - Span metrics / service-graph data flow back to Mimir, powering RED dashboards
   and the service graph.
@@ -55,10 +55,10 @@ to [Alloy](./alloy.md), which forwards them to Tempo.
   request.
 
 ![Grafana Traces Drilldown showing span rate, duration heatmap, and attribute comparison for Tempo](../images/grafana-drilldown-traces.png)
-*Traces Drilldown over the Tempo datasource — span rate, a duration heatmap, and per-attribute breakdowns of the demo app's traces.*
+*Traces Drilldown over the Tempo datasource - span rate, a duration heatmap, and per-attribute breakdowns of the demo app's traces.*
 
 Because the Tempo datasource is wired with **trace-to-logs**, opening a span and
-clicking *Logs for this span* pivots straight to the matching log line in Loki —
+clicking *Logs for this span* pivots straight to the matching log line in Loki -
 one request, both signals, side by side:
 
 ![Grafana Explore split view: a Tempo trace on the left, the correlated Loki log line on the right, linked by trace_id](../images/grafana-traces-to-logs.png)
@@ -68,7 +68,7 @@ one request, both signals, side by side:
 
 In a microservices world, a metric tells you *that* latency went up but not
 *which hop* caused it. Traces pinpoint the culprit. Because Tempo is so cheap to
-run, you can keep every trace and always have the one you need — then pivot to
+run, you can keep every trace and always have the one you need - then pivot to
 logs and metrics without leaving Grafana.
 
 ## Learn more

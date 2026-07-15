@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>otel-demo — traffic console</title>
+  <title>otel-demo - traffic console</title>
   <style>
     :root {
       --bg: #0f1117; --panel: #171a21; --border: #262b36;
@@ -85,7 +85,7 @@
       <div class="row" style="margin-top:12px">
         <label class="inline" for="failPct">simulated errors</label>
         <input id="failPct" type="number" min="0" max="100" step="5" value="0" />
-        <label class="inline">% of orders fail on purpose (payment declined) — visible in metrics · traces · logs</label>
+        <label class="inline">% of orders fail on purpose (payment declined) - visible in metrics · traces · logs</label>
       </div>
     </div>
 
@@ -149,10 +149,10 @@
         const res = await fetch(url, { cache: 'no-store' });
         const body = (await res.text()).trim();
         if (res.ok) ok++; else err++;
-        logLine(res.status, `${url} — ${body}`);
+        logLine(res.status, `${url} - ${body}`);
       } catch (e) {
         err++;
-        logLine(0, `${url} — ${e}`);
+        logLine(0, `${url} - ${e}`);
       }
       bump();
     }

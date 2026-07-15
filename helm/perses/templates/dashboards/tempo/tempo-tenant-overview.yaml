@@ -1,6 +1,6 @@
 # Vendored from perses/community-mixins @ cf419605e54868c45608cd590f47a150358da7a5
 # https://github.com/perses/community-mixins/blob/cf419605e54868c45608cd590f47a150358da7a5/examples/dashboards/operator/tempo/tempo-tenant-overview.yaml
-# Rewritten from v1alpha1 to v1alpha2 by scripts/vendor-perses-dashboards.py — do not hand-edit.
+# Rewritten from v1alpha1 to v1alpha2 by scripts/vendor-perses-dashboards.py - do not hand-edit.
 apiVersion: perses.dev/v1alpha2
 kind: PersesDashboard
 metadata:

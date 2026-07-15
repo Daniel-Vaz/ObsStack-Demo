@@ -1,6 +1,6 @@
-# Grafana — deployed and managed by the Grafana Operator
+# Grafana - deployed and managed by the Grafana Operator
 # (https://github.com/grafana/grafana-operator) via CRDs (see templates/).
-# Requires helm/grafana-operator installed first (the CRDs' owner) — see the
+# Requires helm/grafana-operator installed first (the CRDs' owner) - see the
 # Makefile's `grafana-operator` -> `grafana` ordering.
 #
 # Login: admin / admin (demo only). Reach the UI with `make grafana-ui`.
@@ -11,7 +11,7 @@ adminPassword: admin
 # Exposed to the host as a NodePort. The kind node maps hostPort 3000 ->
 # containerPort 30000 (see kind/cluster.yaml extraPortMappings), so the UI is
 # reachable at http://localhost:3000 with no port-forward. Unlike this repo's
-# other NodePort UIs, the backing Service isn't named after the release —
+# other NodePort UIs, the backing Service isn't named after the release -
 # it's "<release>-service" (grafana-service), a grafana-operator naming
 # convention this chart doesn't control (see scripts/validate.sh).
 service:
@@ -21,8 +21,8 @@ resources:
   requests: { cpu: 100m, memory: 128Mi }
 
 # k8s-sidecar watches every namespace for ConfigMaps labelled
-# grafana_dashboard=1 — this is how kube-prometheus-stack's bundled default
-# dashboards reach Grafana — and materializes them as dashboard JSON files
+# grafana_dashboard=1 - this is how kube-prometheus-stack's bundled default
+# dashboards reach Grafana - and materializes them as dashboard JSON files
 # under a directory Grafana's own file-based provisioner reads (see
 # templates/grafana.yaml).
 sidecar:
@@ -32,7 +32,7 @@ sidecar:
 
 # Provisioned datasources for all four signals, with cross-signal
 # correlations. One GrafanaDatasource CR per entry (see
-# templates/datasources.yaml) — access is always "proxy", hardcoded there.
+# templates/datasources.yaml) - access is always "proxy", hardcoded there.
 datasources:
   - name: Mimir
     uid: mimir
@@ -42,7 +42,7 @@ datasources:
     jsonData:
       prometheusType: Mimir
       timeInterval: 15s
-      # Mimir's ruler is enabled (see helm/mimir/values.yaml) — Alloy syncs
+      # Mimir's ruler is enabled (see helm/mimir/values.yaml) - Alloy syncs
       # PrometheusRules into it and it evaluates them against the
       # kube-prometheus-stack Alertmanager, so let Grafana Alerting manage/show
       # those rules too. The values-prometheus-metrics.yaml overlay sets this to
@@ -111,7 +111,7 @@ datasources:
 # Wiring (see templates/grafana.yaml): the plugin binary is fetched at
 # container start via GF_INSTALL_PLUGINS, and its provider config (including
 # the API key, via secureJsonData) is delivered through file-based plugin
-# provisioning — the same ConfigMap-mounted mechanism this chart already uses
+# provisioning - the same ConfigMap-mounted mechanism this chart already uses
 # for dashboards and datasources.
 #
 # Provider is "custom" (OpenAI wire format). The plugin appends "/v1" (its
@@ -119,10 +119,10 @@ datasources:
 # /v1/chat/completions.
 #
 # `apiKey` is set at deploy time from AZURE_LLM_API_KEY in .env (gitignored;
-# see the Makefile's `grafana` target) — leave it unset here.
+# see the Makefile's `grafana` target) - leave it unset here.
 #
 # `make up LLM_BACKEND=ollama` layers values-ollama-llm.yaml on top of this
-# block to swap in this stack's in-cluster Ollama instead — see
+# block to swap in this stack's in-cluster Ollama instead - see
 # docs/llm-backends.md.
 llm:
   enabled: true
@@ -132,7 +132,7 @@ llm:
   model: gpt-5.4-mini
   apiKey: ""
 
-# Graft — a community "AI Assistant for Grafana" app plugin
+# Graft - a community "AI Assistant for Grafana" app plugin
 # (https://github.com/vikshana/vikshana-graft-app) that layers a natural-language
 # chat UI on top of the `llm` plugin above (it uses grafana-llm-app as its model
 # backend, so keep both enabled together) plus Grafana's MCP tools.
@@ -144,7 +144,7 @@ llm:
 #     Grafana CR config.
 #
 # Version note: upstream's build/publish workflow fires on `v*` tags, but
-# releases are tagged `graft-v*` — so v0.2.0 is the newest tag that ships a
+# releases are tagged `graft-v*` - so v0.2.0 is the newest tag that ships a
 # prebuilt zip (the v0.3.0–v0.6.x sources have no downloadable artifact). Bump
 # pluginUrl if upstream publishes newer builds.
 graft:

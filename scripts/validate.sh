@@ -7,16 +7,16 @@ set -uo pipefail
 cd "$(dirname "$0")/.."
 source scripts/lib.sh
 
-# alloy (default) or prometheus — see the Makefile and docs/metrics-modes.md.
+# alloy (default) or prometheus - see the Makefile and docs/metrics-modes.md.
 # Only Karma and Prometheus itself differ between the two: Karma isn't deployed,
 # and Prometheus's own server doesn't run, under METRICS_MODE=alloy.
 METRICS_MODE="${METRICS_MODE:-alloy}"
 
-# grafana (default) or perses — see the Makefile and docs/dashboard-backends.md.
+# grafana (default) or perses - see the Makefile and docs/dashboard-backends.md.
 DASHBOARD_BACKEND="${DASHBOARD_BACKEND:-grafana}"
 
 info "Waiting for all pods in '$NAMESPACE' to become Ready (timeout 5m)..."
-# Exclude Succeeded pods (e.g. the mimir make-minio-buckets Job) — a completed
+# Exclude Succeeded pods (e.g. the mimir make-minio-buckets Job) - a completed
 # pod never reports Ready, which would otherwise hang the wait until timeout.
 if kubectl wait --for=condition=Ready pods --all \
      --field-selector=status.phase!=Succeeded -n "$NAMESPACE" --timeout=5m; then
@@ -55,7 +55,7 @@ grafana_datasource_health() {
   # the type because not every datasource plugin ships a backend: frontend-only
   # plugins (e.g. the Alertmanager datasource) can't answer the backend
   # /health endpoint and return "plugin.unavailable" there even when they work
-  # fine — the UI "Test" button probes them a different way (see below).
+  # fine - the UI "Test" button probes them a different way (see below).
   local pairs
   pairs="$(curl -s -u "$creds" "localhost:${PF_PORT}/api/datasources" \
     | python3 -c 'import json,sys
@@ -71,7 +71,7 @@ for d in json.load(sys.stdin):
       pass "datasource $uid healthy"
     elif echo "$out" | grep -qi 'plugin.unavailable\|plugin unavailable'; then
       # Frontend-only plugin: the backend /health endpoint doesn't exist.
-      # Probe it the way Grafana's UI does — proxy a request through to the
+      # Probe it the way Grafana's UI does - proxy a request through to the
       # backing service and treat a 2xx as healthy.
       local probe_path
       case "$type" in
@@ -79,7 +79,7 @@ for d in json.load(sys.stdin):
         *)            probe_path="" ;;
       esac
       if [[ -z "$probe_path" ]]; then
-        warn "datasource $uid ($type) has no backend health check — skipping"
+        warn "datasource $uid ($type) has no backend health check - skipping"
         continue
       fi
       local code
@@ -103,7 +103,7 @@ for d in json.load(sys.stdin):
 # wiring/presence instead of a live backend ping: the four PersesGlobalDatasources
 # are visible via the API, and at least one vendored community-mixins dashboard
 # loaded into the "observability" project (see helm/perses/templates/dashboards/
-# and scripts/vendor-perses-dashboards.py — the Kubernetes namespace name maps
+# and scripts/vendor-perses-dashboards.py - the Kubernetes namespace name maps
 # 1:1 to a Perses project, auto-created by the operator).
 #
 # Fills the caller's PERSES_NAMES/PERSES_DASHBOARD_COUNT vars; returns success
@@ -142,12 +142,12 @@ perses_datasource_health() {
 
 if [[ "$DASHBOARD_BACKEND" == "perses" ]]; then
   # The Operator syncs PersesGlobalDatasource/PersesDashboard CRs into the
-  # Perses server asynchronously — triggered by a watch on the Perses CR's
+  # Perses server asynchronously - triggered by a watch on the Perses CR's
   # own Available condition, not exposed as a condition on the datasource/
   # dashboard CRs themselves, so there's nothing to `kubectl wait` on for
   # "sync complete" the way the Grafana target waits for
   # DatasourceSynchronized. By the time this runs the sync is usually done,
-  # but can lag a few seconds, so poll instead of a single check — and
+  # but can lag a few seconds, so poll instead of a single check - and
   # re-establish the port-forward tunnel on every attempt rather than trusting
   # one to survive the whole poll window (some networks kill long-idle local
   # port-forwards, which would otherwise look identical to Perses never syncing).
@@ -160,7 +160,7 @@ if [[ "$DASHBOARD_BACKEND" == "perses" ]]; then
     sleep 3
   done
   # perses_datasource_health only reads PERSES_NAMES/PERSES_DASHBOARD_COUNT
-  # (set by the polling loop above) — no more network calls, so no need to
+  # (set by the polling loop above) - no more network calls, so no need to
   # wrap it in another with_port_forward.
   if ! perses_datasource_health; then
     FAILS=$((FAILS+1))

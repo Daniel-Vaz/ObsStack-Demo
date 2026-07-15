@@ -1,7 +1,7 @@
-# otel-demo — an OpenTelemetry-instrumented demo app
+# otel-demo - an OpenTelemetry-instrumented demo app
 
 A small, self-contained microservices app (Go) that generates **all four
-signals** — metrics, logs, traces, profiles — and feeds them into **this repo's
+signals** - metrics, logs, traces, profiles - and feeds them into **this repo's
 existing Grafana LGTM stack**.
 
 Everything runs in its own **`otel-demo`** namespace.
@@ -16,7 +16,7 @@ you ─────┘          └──▶ catalog              (variable late
  (web UI)
 ```
 
-The **frontend serves an interactive web UI at `http://localhost:8080`** — click
+The **frontend serves an interactive web UI at `http://localhost:8080`** - click
 *Place order*, *Browse catalog*, fire a burst, or flip on *Auto load* to drive a
 steady stream from the browser. Each `/order` produces a two-level distributed
 trace with fan-out.
@@ -24,18 +24,18 @@ trace with fan-out.
 The UI also has a **simulated errors** control: set it to e.g. `30%` and a third
 of orders will fail on purpose (payment "declines" the charge). The failure is
 injected in the `payment` service and propagates back up the call chain, so it
-surfaces in **all three signals at once** — an errored span with an exception
+surfaces in **all three signals at once** - an errored span with an exception
 event (Tempo), `ERROR` log lines from payment → checkout → frontend (Loki), and
 the `demo_order_errors_total` / `demo_payment_failures_total` counters plus 5xx
 `http_server_request_duration_seconds_count` (Mimir). See
 [Simulated errors & alerting](#simulated-errors--alerting).
 
-![otel-demo traffic console web UI at localhost:8080 — Place order / Browse catalog / Send burst controls, a live request counter, and a response log](../../docs/images/oteldemoapp-ui.png)
-*The traffic console at `http://localhost:8080` — drive orders by hand or with *Auto load*, and watch requests, 2xx, and errors tick up live. Every order fans out `frontend → checkout → payment` and `frontend → catalog`.*
+![otel-demo traffic console web UI at localhost:8080 - Place order / Browse catalog / Send burst controls, a live request counter, and a response log](../../docs/images/oteldemoapp-ui.png)
+*The traffic console at `http://localhost:8080` - drive orders by hand or with *Auto load*, and watch requests, 2xx, and errors tick up live. Every order fans out `frontend → checkout → payment` and `frontend → catalog`.*
 
 `loadgen` is an **optional** background traffic driver that hits `/order` on a
 timer so the stack always has live telemetry with no interaction. It's **off by
-default** — you generate traffic by hand from the UI; set `DEMO_LOADGEN=true` to
+default** - you generate traffic by hand from the UI; set `DEMO_LOADGEN=true` to
 also deploy it.
 
 ### Frontend routes
@@ -70,14 +70,14 @@ Two details make this work with the stack untouched:
 
 Dial the web UI's **simulated errors** slider above `0%` (or set `FAIL_RATE` on
 the payment deployment) and the demo starts failing that fraction of orders,
-lighting up every signal — and the two example alerting paths this repo ships:
+lighting up every signal - and the two example alerting paths this repo ships:
 
-- **Metric-based — Mimir ruler.** `k8s/prometheusrules.yaml` is a
+- **Metric-based - Mimir ruler.** `k8s/prometheusrules.yaml` is a
   `PrometheusRule` that Alloy syncs into **Mimir's ruler**, which evaluates it.
   It alerts on the failed-order ratio (`demo_order_errors_total` /
   `demo_orders_total`), on `demo_payment_failures_total`, and on 5xx
   `http_server_request_duration_seconds_count`.
-- **Log-based — Loki ruler.** `k8s/loki-rules.yaml` is a `ConfigMap` of LogQL
+- **Log-based - Loki ruler.** `k8s/loki-rules.yaml` is a `ConfigMap` of LogQL
   alerting rules synced into the **Loki ruler** by the chart's rules sidecar
   (enabled in `helm/loki/values.yaml`). It alerts on the rate/ratio of `ERROR`
   log lines and on `payment declined` messages.
@@ -115,7 +115,7 @@ make demo-clean                # delete the otel-demo namespace
 ```
 
 Then open the **web UI at `http://localhost:8080`** to drive traffic, and
-explore the signals in Grafana (`http://localhost:3000`, admin/admin) — see the
+explore the signals in Grafana (`http://localhost:3000`, admin/admin) - see the
 repo README's "Demo application" section for the guided tour.
 
 > The `:8080` host mapping is published by the kind cluster config. On a cluster

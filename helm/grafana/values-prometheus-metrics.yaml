@@ -1,6 +1,6 @@
 # Overlay applied on top of values.yaml only when METRICS_MODE=prometheus
 # (see the Makefile and docs/metrics-modes.md). `datasources` is a YAML list,
-# and Helm replaces whole lists on override rather than merging by entry — so
+# and Helm replaces whole lists on override rather than merging by entry - so
 # this overlay must repeat the *entire* datasources list, not just the one field
 # that changes. The only difference from values.yaml is the Mimir entry's
 # `manageAlerts: false`: in this mode, Mimir's ruler is disabled

@@ -1,7 +1,7 @@
 # Overlay applied only in LLM_BACKEND=ollama (see the Makefile's
 # LLM_EXTRA_VALUES), layered on top of values.yaml's `llm` block. Swaps the
 # grafana-llm-app plugin from Azure AI Foundry over to this stack's in-cluster
-# Ollama (helm/ollama) via its OpenAI-compatible API — no API key needed,
+# Ollama (helm/ollama) via its OpenAI-compatible API - no API key needed,
 # since Ollama ignores auth. See docs/llm-backends.md.
 llm:
   # Bare Service URL for helm/ollama (the plugin adds "/v1").

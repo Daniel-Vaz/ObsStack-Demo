@@ -8,8 +8,8 @@ service before, start here. For the design rationale see
 
 ## What "instrumented" even means
 
-A service is **instrumented** when, in addition to doing its job, it *emits telemetry* —
-data about what it's doing — that an outside system can collect and show you. This demo
+A service is **instrumented** when, in addition to doing its job, it *emits telemetry* -
+data about what it's doing - that an outside system can collect and show you. This demo
 emits the **four signals** of observability:
 
 | Signal | Answers the question | Example from this app |
@@ -42,16 +42,16 @@ store. This keeps the app simple and lets you swap backends without touching cod
 Almost all of the OTel wiring is in **two small shared files**, so each service's
 `main.go` stays focused on business logic:
 
-- [`internal/telemetry/telemetry.go`](../apps/otel-demo/internal/telemetry/telemetry.go) —
+- [`internal/telemetry/telemetry.go`](../apps/otel-demo/internal/telemetry/telemetry.go) -
   one `Init()` call that sets up traces, metrics, and logging.
-- [`internal/httpx/httpx.go`](../apps/otel-demo/internal/httpx/httpx.go) — an
+- [`internal/httpx/httpx.go`](../apps/otel-demo/internal/httpx/httpx.go) - an
   OTel-instrumented HTTP server and client, plus the `/metrics` and `/debug/pprof`
   endpoints.
 
 Every service (`frontend`, `checkout`, `payment`, `catalog`, `loadgen`) just calls into
 these. Let's walk each signal from the app's side.
 
-## 1. Traces — one `Init()`, then automatic propagation
+## 1. Traces - one `Init()`, then automatic propagation
 
 A **trace** follows a single request as it hops between services. Each hop is a **span**
 (a timed operation with a name and attributes). Spans link together via a **trace ID**
@@ -59,7 +59,7 @@ that travels along with the request.
 
 ### Setup (once per service)
 
-Every service starts the same way — one call wires up everything:
+Every service starts the same way - one call wires up everything:
 
 ```go
 tel, err := telemetry.Init(ctx, "frontend")  // service name
@@ -85,7 +85,7 @@ This is a deliberate OTel convention: **configuration by environment variable**,
 same binary points at any collector without a rebuild. Traces go to Alloy over OTLP/gRPC,
 and Alloy forwards them to Tempo.
 
-### Server spans — created for you
+### Server spans - created for you
 
 You almost never create spans by hand for incoming requests. The
 [`httpx.Handle`](../apps/otel-demo/internal/httpx/httpx.go#L47) helper wraps each route in
@@ -97,13 +97,13 @@ func Handle(mux *http.ServeMux, pattern, op string, h http.HandlerFunc) {
 }
 ```
 
-So `frontend`'s route becomes a span the moment a request arrives — no manual code:
+So `frontend`'s route becomes a span the moment a request arrives - no manual code:
 
 ```go
 httpx.Handle(mux, "/", "GET /", func(w http.ResponseWriter, r *http.Request) { ... })
 ```
 
-### Context propagation — how the trace crosses service boundaries
+### Context propagation - how the trace crosses service boundaries
 
 This is the part that surprises newcomers. For `frontend → checkout → payment` to show up
 as **one** trace (not three separate ones), the trace ID must ride along on the outgoing
@@ -128,7 +128,7 @@ HTTP calls. Two things make that happen:
 The golden rule for beginners: **always thread `ctx` through your call chain.** That single
 variable is how OTel knows one operation is part of another.
 
-### Manual spans — for interesting sub-operations
+### Manual spans - for interesting sub-operations
 
 Sometimes you *do* want a span for a chunk of work inside a service. `payment` marks its
 CPU-heavy card authorization so it stands out in the trace waterfall
@@ -141,14 +141,14 @@ span.End()
 ```
 
 `catalog` does the same around its simulated database query (`"query-inventory"`). These
-are the only two hand-written spans in the whole app — everything else is automatic.
+are the only two hand-written spans in the whole app - everything else is automatic.
 
-## 2. Metrics — the OTel SDK + a `/metrics` endpoint
+## 2. Metrics - the OTel SDK + a `/metrics` endpoint
 
 **Metrics** are numbers aggregated over time. This app produces two kinds:
 
 **Automatic RED metrics.** Because every route is wrapped in `otelhttp` (see above), you get
-Rate/Errors/Duration histograms per route for free — no extra code.
+Rate/Errors/Duration histograms per route for free - no extra code.
 
 **A custom counter.** `frontend` counts completed orders
 ([`cmd/frontend/main.go`](../apps/otel-demo/cmd/frontend/main.go#L31)):
@@ -176,7 +176,7 @@ pod label). Alloy reads that `PodMonitor` straight from the Prometheus-Operator 
 scrapes the endpoint, and remote-writes to Mimir. **You expose `/metrics`; the platform
 does the rest.**
 
-## 3. Logs — structured JSON, correlated to traces
+## 3. Logs - structured JSON, correlated to traces
 
 The app logs with Go's standard `slog`, configured in `Init` to emit **JSON** to stdout
 ([`telemetry.go`](../apps/otel-demo/internal/telemetry/telemetry.go#L88)):
@@ -185,7 +185,7 @@ The app logs with Go's standard `slog`, configured in `Init` to emit **JSON** to
 slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, ...)).With("service", serviceName))
 ```
 
-Nothing in the app ships logs anywhere — it just writes to stdout. Grafana Alloy tails the
+Nothing in the app ships logs anywhere - it just writes to stdout. Grafana Alloy tails the
 pod's stdout (standard Kubernetes log collection) and pushes it to Loki. This is the
 easiest signal to reason about: **print to stdout, the platform collects it.**
 
@@ -217,7 +217,7 @@ telemetry.Log(ctx).Info("order placed", "catalog", cat, "checkout", out)
 > under the same name, which turns the ID into a clickable link to the trace. A different
 > spelling would silently break log↔trace correlation.
 
-## 4. Profiles — pprof, scraped by Alloy
+## 4. Profiles - pprof, scraped by Alloy
 
 **Profiling** answers "where is the CPU actually going?" Go ships this built in via
 `net/http/pprof`. [`httpx.NewMux`](../apps/otel-demo/internal/httpx/httpx.go#L31) registers
@@ -245,10 +245,10 @@ When a request hits `frontend`'s `/order` (from the web UI or the loadgen), it
 produces all four at once:
 
 1. **Trace:** a span for `GET /order` on `frontend`, with child spans on `catalog`
-   (`query-inventory`) and `checkout` → `payment` (`authorize-card`) — one connected
+   (`query-inventory`) and `checkout` → `payment` (`authorize-card`) - one connected
    waterfall, thanks to context propagation.
 2. **Metrics:** the RED histograms tick up on every service, and `demo_orders` increments.
-3. **Logs:** `"order placed"`, `"checkout complete"`, `"payment authorized"` — each tagged
+3. **Logs:** `"order placed"`, `"checkout complete"`, `"payment authorized"` - each tagged
    with the same `trace_id`, so they're one click away from the trace above.
 4. **Profiles:** `payment`'s CPU time shows up in `burnCPU` in the flame graph.
 
@@ -264,17 +264,17 @@ If you remember nothing else about instrumenting a service with OTel:
    sub-operations worth highlighting.
 3. **The app emits; the platform collects.** The service pushes traces to a collector,
    exposes `/metrics` and `/debug/pprof`, and prints logs to stdout. It never names Tempo,
-   Loki, Mimir, or Pyroscope — collectors handle delivery, so backends can change without
+   Loki, Mimir, or Pyroscope - collectors handle delivery, so backends can change without
    code changes.
 
 ## Where to look next
 
-- [`internal/telemetry/telemetry.go`](../apps/otel-demo/internal/telemetry/telemetry.go) —
+- [`internal/telemetry/telemetry.go`](../apps/otel-demo/internal/telemetry/telemetry.go) -
   the whole SDK setup, ~110 lines.
-- [`internal/httpx/httpx.go`](../apps/otel-demo/internal/httpx/httpx.go) — the instrumented
+- [`internal/httpx/httpx.go`](../apps/otel-demo/internal/httpx/httpx.go) - the instrumented
   server and client.
-- Any `cmd/*/main.go` — see how a real handler uses the helpers.
-- [architecture.md](./architecture.md) — how the collectors and stores are configured on
+- Any `cmd/*/main.go` - see how a real handler uses the helpers.
+- [architecture.md](./architecture.md) - how the collectors and stores are configured on
   the platform side.
 </content>
 </invoke>

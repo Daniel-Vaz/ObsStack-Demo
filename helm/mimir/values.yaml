@@ -1,4 +1,4 @@
-# Mimir (metrics) — minimal footprint.
+# Mimir (metrics) - minimal footprint.
 #
 # NOTE: Mimir has no official single-binary/monolithic Helm chart; the only
 # first-party chart is grafana/mimir-distributed (microservices). We therefore
@@ -13,7 +13,7 @@
 #
 # The ruler is enabled: Alloy syncs PrometheusRules into it (see
 # helm/alloy/values.yaml mimir.rules.kubernetes), and it evaluates them and
-# fires to the kube-prometheus-stack Alertmanager — Mimir's own bundled
+# fires to the kube-prometheus-stack Alertmanager - Mimir's own bundled
 # Alertmanager component stays disabled; the one Alertmanager throughout is the
 # one kube-prometheus-stack deploys. The METRICS_MODE=prometheus mode disables
 # the ruler (see values-prometheus-metrics.yaml and docs/metrics-modes.md) since
@@ -50,7 +50,7 @@ mimir:
       ingestion_burst_size: 200000
     # The chart's default alertmanager_url points at Mimir's own bundled
     # Alertmanager component, which is disabled below (alertmanager.enabled:
-    # false) — there's only ever one Alertmanager in this demo, the one
+    # false) - there's only ever one Alertmanager in this demo, the one
     # kube-prometheus-stack deploys. Point the ruler at it directly instead.
     ruler:
       alertmanager_url: http://kube-prometheus-stack-alertmanager.observability.svc.cluster.local:9093

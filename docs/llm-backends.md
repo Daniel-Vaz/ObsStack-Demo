@@ -11,12 +11,12 @@
 built on it) up to an **Azure AI Foundry** endpoint:
 
 - Provider is `custom` (OpenAI wire format) pointed at
-  `https://dvaz-tests-resource.services.ai.azure.com/openai` — see
+  `https://dvaz-tests-resource.services.ai.azure.com/openai` - see
   [`helm/grafana/values.yaml`](../helm/grafana/values.yaml)'s `llm` block.
 - The API key comes from `AZURE_LLM_API_KEY` in `.env` (gitignored), which the
   Makefile's `grafana` target passes to Helm as `--set-string llm.apiKey=...`.
   It's delivered to the plugin via `secureJsonData` in the file-based plugin
-  provisioning ConfigMap — see
+  provisioning ConfigMap - see
   [`templates/grafana.yaml`](../helm/grafana/templates/grafana.yaml).
 - Both of the plugin's `base`/`large` model slots map to the `gpt-5.4-mini`
   deployment.
@@ -27,7 +27,7 @@ See [architecture.md](architecture.md) for the full design.
 
 Set `LLM_BACKEND=ollama` to run the AI assistant against
 [Ollama](solutions/ollama.md), deployed in-cluster, instead of Azure AI
-Foundry. This is useful when you want a fully local, key-less model backend —
+Foundry. This is useful when you want a fully local, key-less model backend -
 for example while testing offline, or without an Azure API key to hand.
 
 ```bash
@@ -44,9 +44,9 @@ model backend Grafana's AI assistant talks to** changes.
 | | Default (Azure AI Foundry) | `LLM_BACKEND=ollama` |
 |---|---|---|
 | Model provider | Azure AI Foundry (`gpt-5.4-mini`) | in-cluster Ollama (`llama3.2:3b`) |
-| `make up` deploys | — | Ollama (`ollama-helm/ollama`), plus a `postStart` model pull |
-| API key | `AZURE_LLM_API_KEY` from `.env` | none — Ollama ignores auth |
-| Response speed | as fast as the Azure deployment | slow — CPU-only inference |
+| `make up` deploys | - | Ollama (`ollama-helm/ollama`), plus a `postStart` model pull |
+| API key | `AZURE_LLM_API_KEY` from `.env` | none - Ollama ignores auth |
+| Response speed | as fast as the Azure deployment | slow - CPU-only inference |
 
 Under the hood, [`helm/grafana/values.yaml`](../helm/grafana/values.yaml) sets
 the Azure defaults, and a sibling
@@ -57,6 +57,6 @@ applied (via an extra `--values`) only when `LLM_BACKEND=ollama`, swapping the
 ### Switching between modes
 
 You can switch modes with `make up LLM_BACKEND=...` without recreating the
-cluster — `make grafana` re-provisions the plugin config either way. In
+cluster - `make grafana` re-provisions the plugin config either way. In
 `LLM_BACKEND=ollama`, also run `make ollama` (or a fresh `make up`) to deploy
 the model backend itself.

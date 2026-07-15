@@ -1,4 +1,4 @@
-# metrics-server — kubelet resource metrics (https://github.com/kubernetes-sigs/metrics-server)
+# metrics-server - kubelet resource metrics (https://github.com/kubernetes-sigs/metrics-server)
 #
 # Serves the metrics.k8s.io API (`kubectl top nodes`/`kubectl top pods`, HPA)
 # by scraping each kubelet's Summary API. This is a different metrics path
@@ -12,7 +12,7 @@
 # leg still verifies the kubelet's serving cert by default, which fails on
 # kind: kind's self-signed kubelet certs aren't issued for a SAN matching the
 # node's IP ("x509: cannot validate certificate for <node-ip> because it
-# doesn't contain any IP SANs"). --kubelet-insecure-tls skips that check —
+# doesn't contain any IP SANs"). --kubelet-insecure-tls skips that check -
 # standard practice for kind/minikube-style clusters, not for production.
 args:
   - --kubelet-insecure-tls

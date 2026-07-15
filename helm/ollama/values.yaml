@@ -1,14 +1,14 @@
-# Ollama — local LLM inference server (https://github.com/otwld/ollama-helm)
+# Ollama - local LLM inference server (https://github.com/otwld/ollama-helm)
 #
 # Serves the llama3.2:3b model over Ollama's native REST API on :11434.
-# Grafana's grafana-llm-app plugin (and the Graft assistant built on it — see
+# Grafana's grafana-llm-app plugin (and the Graft assistant built on it - see
 # helm/grafana/values.yaml) use it as their model provider via Ollama's
 # OpenAI-compatible /v1 API, so this demo needs no external LLM API key.
 #
 # Lightweight/demo trade-offs:
 #   - CPU inference only. This is a WSL2 + kind + rootless-Podman setup on an
 #     Intel Core Ultra (Arc iGPU + NPU), but WSL2 exposes neither a GPU render
-#     node (/dev/dri) nor the NPU (/dev/accel) into Linux — only /dev/dxg — and
+#     node (/dev/dri) nor the NPU (/dev/accel) into Linux - only /dev/dxg - and
 #     Ollama can't use an Intel iGPU/NPU anyway (it supports only NVIDIA/AMD).
 #     So inference is CPU-bound; we give it a chunk of cores below.
 #   - No PersistentVolume: the model is pulled into the container filesystem
@@ -18,7 +18,7 @@
 #     container), so we accept the re-pull cost instead of adding a PVC that
 #     would only help across in-cluster pod restarts. Flip
 #     `persistentVolume.enabled: true` (+ `.size`) if you want that.
-#   - No web UI to expose — Grafana reaches Ollama cluster-internally at
+#   - No web UI to expose - Grafana reaches Ollama cluster-internally at
 #     ollama.observability.svc.cluster.local:11434.
 
 image:
@@ -29,7 +29,7 @@ ollama:
   models:
     # Pulled via a postStart hook the first time the pod starts. Kubernetes
     # doesn't mark the container "Running" (so readiness probing, and thus
-    # `helm --wait`) until this hook completes — see the Makefile's
+    # `helm --wait`) until this hook completes - see the Makefile's
     # `ollama` target, which uses a longer OLLAMA_TIMEOUT to cover it.
     pull:
       - llama3.2:3b
@@ -47,7 +47,7 @@ extraEnv:
 
 # CPU inference scales with cores. The kind node runs on a 14-thread host, so
 # give Ollama a generous slice (leaving headroom for the rest of the stack)
-# rather than the chart's small default — this is the other half of keeping a
+# rather than the chart's small default - this is the other half of keeping a
 # Graft turn under the plugin's 2-minute timeout. 3B weights are ~2GB, so the
 # memory ask is modest.
 resources:

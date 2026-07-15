@@ -16,8 +16,8 @@ helm.sh/chart: {{ .Chart.Name }}-{{ .Chart.Version }}
 {{/*
 Label carried on the Grafana CR itself (and, via the Operator's label
 inheritance, onto every Service/Deployment it generates) so that
-GrafanaDatasource/GrafanaDashboard instanceSelectors — and this chart's own
-ServiceMonitor — can target this one Grafana instance specifically.
+GrafanaDatasource/GrafanaDashboard instanceSelectors - and this chart's own
+ServiceMonitor - can target this one Grafana instance specifically.
 */}}
 {{- define "grafana.instanceSelectorLabels" -}}
 grafana-instance: {{ .Release.Name | quote }}

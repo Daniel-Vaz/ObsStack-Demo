@@ -1,6 +1,6 @@
 apiVersion: v2
 name: karma
-description: Karma — alert dashboard for Prometheus Alertmanager
+description: Karma - alert dashboard for Prometheus Alertmanager
 type: application
 # Chart version is local to this repo; appVersion tracks the upstream Karma
 # release we pin in values.yaml.

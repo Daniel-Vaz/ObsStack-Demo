@@ -23,7 +23,7 @@ spec:
         # /proxy/globaldatasources/<name>/...), the same role Grafana's
         # hardcoded `access: proxy` plays for its own datasources (see
         # helm/grafana/templates/datasources.yaml). directUrl instead tells
-        # the *browser* to call the URL directly — fine for a publicly
+        # the *browser* to call the URL directly - fine for a publicly
         # reachable endpoint, not for these.
         proxy:
           kind: HTTPProxy

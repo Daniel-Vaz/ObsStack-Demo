@@ -37,7 +37,7 @@ metadata:
 data:
   {{- if .Values.llm.enabled }}
   # Point the LLM app at its model provider (Azure AI Foundry by default, or
-  # this stack's in-cluster Ollama in LLM_BACKEND=ollama — see values.yaml and
+  # this stack's in-cluster Ollama in LLM_BACKEND=ollama - see values.yaml and
   # values-ollama-llm.yaml). Provider "custom" = OpenAI wire format; the
   # plugin appends "/v1" to the url.
   grafana-llm-app.yaml: |-
@@ -93,7 +93,7 @@ spec:
 
   # Exposed to the host as a NodePort. Note the generated Service is named
   # "<release>-service" (an Operator naming convention, not this chart's
-  # choice) — see scripts/validate.sh, which references it by that name.
+  # choice) - see scripts/validate.sh, which references it by that name.
   service:
     spec:
       type: NodePort

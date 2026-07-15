@@ -1,7 +1,7 @@
 # Overlay applied on top of values.yaml only when METRICS_MODE=prometheus
 # (see the Makefile and docs/metrics-modes.md). `alloy.configMap.content` is a
 # single string, and a later --values file replaces it wholesale rather than
-# deep-merging — so this overlay must carry Alloy's *entire* River config, not
+# deep-merging - so this overlay must carry Alloy's *entire* River config, not
 # just a diff. It's a logs/traces/profiles-only pipeline, with the metrics
 # section (prometheus.remote_write / prometheus.operator.* /
 # mimir.rules.kubernetes) from values.yaml left out: in this mode, kube-
@@ -21,7 +21,7 @@ serviceMonitor:
 # Expose only the Alloy UI to the host as a NodePort. The kind node maps
 # hostPort 12345 -> containerPort 30345 (see kind/cluster.yaml extraPortMappings),
 # so the UI is reachable at http://localhost:12345. The OTLP receiver ports stay
-# cluster-internal — demo apps push to them via the in-cluster Service DNS.
+# cluster-internal - demo apps push to them via the in-cluster Service DNS.
 service:
   type: NodePort
   nodePort: 30345   # UI / http-metrics (port 12345)

@@ -1,8 +1,8 @@
-# Karma — alert dashboard for Prometheus Alertmanager
+# Karma - alert dashboard for Prometheus Alertmanager
 # (https://github.com/prymitive/karma)
 #
 # Karma is a read-only UI: it polls Alertmanager's HTTP API and renders every
-# alert it finds — active, suppressed (inhibited) and silenced. It is NOT an
+# alert it finds - active, suppressed (inhibited) and silenced. It is NOT an
 # Alertmanager receiver; Alertmanager never pushes to it. Pointing Karma at the
 # in-cluster Alertmanager (below) is therefore what makes "all alerts" appear
 # here, and the catch-all route in helm/kube-prometheus-stack/values.yaml is
@@ -10,7 +10,7 @@
 # first place.
 #
 # This is a small first-party chart (no upstream Helm chart is published for
-# Karma), deployed by `make karma` — part of `make up` only in the
+# Karma), deployed by `make karma` - part of `make up` only in the
 # METRICS_MODE=prometheus mode (see docs/metrics-modes.md).
 
 image:
@@ -45,5 +45,5 @@ alertmanager:
       timeout: 20s
       # Proxy Alertmanager API calls through the Karma backend. Required here
       # because the browser can't resolve the in-cluster Service DNS name above
-      # — Karma's pod reaches Alertmanager on the browser's behalf.
+      # - Karma's pod reaches Alertmanager on the browser's behalf.
       proxy: true

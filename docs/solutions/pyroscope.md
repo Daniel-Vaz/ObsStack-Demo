@@ -1,6 +1,6 @@
 # Pyroscope
 
-**In one line:** continuous profiling — it answers "**where is my CPU/memory
+**In one line:** continuous profiling - it answers "**where is my CPU/memory
 actually going?**" with flame graphs you can scroll back through time.
 
 > Chart: `grafana/pyroscope` (v2.1.0, monolithic `all` target) ·
@@ -9,14 +9,14 @@ actually going?**" with flame graphs you can scroll back through time.
 
 ## What it is
 
-A **profile** is a breakdown of where a program spends a resource — which
+A **profile** is a breakdown of where a program spends a resource - which
 functions burned the CPU, or held the most memory. Traditionally you'd capture a
 profile by hand when something was already on fire. **Grafana Pyroscope** does it
 **continuously**: it collects lightweight profiles from your services all the
 time and stores them, so you can open a **flame graph** for *any* point in the
 past, not just when you remembered to press record.
 
-A flame graph shows the call stack as nested bars — the **wider** a bar, the more
+A flame graph shows the call stack as nested bars - the **wider** a bar, the more
 of the resource that function accounts for. The widest bar at the bottom is your
 hot path.
 
@@ -26,7 +26,7 @@ hot path.
   clock, so post-mortem "what was it doing at 2am?" is answerable.
 - **Time-travel flame graphs.** Pick any window and see the aggregated stacks
   for it; diff two windows to see what changed.
-- **Language profilers feed it.** It ingests profiles from runtimes — for Go,
+- **Language profilers feed it.** It ingests profiles from runtimes - for Go,
   the built-in `net/http/pprof` endpoints are scraped directly.
 
 ## How we use it in this demo
@@ -44,17 +44,17 @@ ships the profiles to Pyroscope.
 ## Try it
 
 - In Grafana, **Explore → Pyroscope** and select the `payment` service.
-- Look at the CPU flame graph — the wide `burnCPU` / hashing frame is the
+- Look at the CPU flame graph - the wide `burnCPU` / hashing frame is the
   intentional hot spot.
 - Narrow the time range to a burst of order traffic and watch the profile change.
 
 ![Grafana Profiles Drilldown showing a CPU flame graph and top-functions table for a service scraped by Pyroscope](../images/grafana-drilldown-profiles.png)
-*Profiles Drilldown over the Pyroscope datasource — CPU-time-over-time on top, the flame graph and top-functions table below. Wider frames = more CPU.*
+*Profiles Drilldown over the Pyroscope datasource - CPU-time-over-time on top, the flame graph and top-functions table below. Wider frames = more CPU.*
 
 ## Why it matters
 
 Metrics, logs, and traces tell you *that* a service is slow or hungry and *which*
-one — profiling tells you the **exact function** to fix. It closes the last mile
+one - profiling tells you the **exact function** to fix. It closes the last mile
 from "checkout latency is up" to "this specific loop is the cost," making it the
 fourth signal that turns observability into concrete code changes.
 

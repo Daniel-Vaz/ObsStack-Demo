@@ -1,5 +1,5 @@
 // loadgen continuously drives the frontend so the stack always has live
-// telemetry. It is a client only: no server, no /metrics, not profiled — but it
+// telemetry. It is a client only: no server, no /metrics, not profiled - but it
 // still emits its own client spans (root of each trace) and stdout logs.
 package main
 

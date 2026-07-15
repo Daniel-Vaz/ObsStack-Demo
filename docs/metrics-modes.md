@@ -19,7 +19,7 @@ signals. For metrics and alerting that means:
   `http://localhost:9093` show what's firing.
 
 kube-prometheus-stack deploys only the Prometheus **Operator**,
-kube-state-metrics, node-exporter, and Alertmanager — no Prometheus server. See
+kube-state-metrics, node-exporter, and Alertmanager - no Prometheus server. See
 [architecture.md](architecture.md) for the full design.
 
 ## The `METRICS_MODE=prometheus` testing mode
@@ -38,8 +38,8 @@ make up METRICS_MODE=prometheus     # bring the whole stack up in this mode
 `make kube-prometheus-stack` / `alloy` / `mimir` / `grafana` targets, and
 `make validate`.
 
-Everything else about the demo — Loki, Tempo, Pyroscope, the Grafana panels, the
-otel-demo app, logs, traces, and profiles — is identical to the default. Only
+Everything else about the demo - Loki, Tempo, Pyroscope, the Grafana panels, the
+otel-demo app, logs, traces, and profiles - is identical to the default. Only
 **how metrics are scraped** and **how alerting rules are evaluated** changes.
 
 ### What changes
@@ -51,7 +51,7 @@ otel-demo app, logs, traces, and profiles — is identical to the default. Only
 | Prometheus server | not deployed | deployed by kube-prometheus-stack |
 | Mimir ruler | enabled | disabled |
 | Alert dashboard | Grafana Alerting (Mimir datasource) | Karma, plus Grafana Alerting |
-| Extra UIs | — | Prometheus `http://localhost:9090`, Karma `http://localhost:8081` |
+| Extra UIs | - | Prometheus `http://localhost:9090`, Karma `http://localhost:8081` |
 
 Under the hood, every affected chart keeps its default `values.yaml` for the
 Alloy setup, plus a sibling `values-prometheus-metrics.yaml` overlay that is
@@ -73,7 +73,7 @@ With Prometheus in the loop you also get its own query UI at
 `http://localhost:9090`:
 
 ![Prometheus query UI at localhost:9090 graphing an apiserver burn-rate PromQL expression](images/prometheus-ui.png)
-*Prometheus's own UI at `http://localhost:9090` — a short 2-hour local buffer, queryable with PromQL before samples are remote-written to Mimir. Open **Status → Targets** to watch it discover and scrape every component.*
+*Prometheus's own UI at `http://localhost:9090` - a short 2-hour local buffer, queryable with PromQL before samples are remote-written to Mimir. Open **Status → Targets** to watch it discover and scrape every component.*
 
 ### Karma, the alert dashboard
 
@@ -84,6 +84,6 @@ Grafana Alerting already covers "what's firing right now," so Karma is left out.
 ### Switching between modes
 
 kind's `extraPortMappings` are static, so the Prometheus (`9090`) and Karma
-(`8081`) host ports are always mapped — they simply sit idle in the default mode
+(`8081`) host ports are always mapped - they simply sit idle in the default mode
 with nothing listening. You can switch modes with `make up METRICS_MODE=...`
 without recreating the cluster.

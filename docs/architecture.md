@@ -23,7 +23,7 @@ This document records the *why* behind the setup. For usage, see the [README](..
 | Loki      | `deploymentMode: SingleBinary`, scalable workloads scaled to 0, filesystem storage |
 | Tempo     | `grafana/tempo` chart *is* the single-binary deployment; filesystem storage |
 | Pyroscope | chart runs the `all` target as one StatefulSet by default |
-| Mimir     | no monolithic chart exists — see below |
+| Mimir     | no monolithic chart exists - see below |
 
 ### Mimir: the exception
 
@@ -35,14 +35,14 @@ scale rather than introducing a non-Helm install:
 - `ingester` / `store_gateway` `zoneAwareReplication.enabled: false` → one replica each
   instead of three zones; `rollout_operator` disabled (only needed for zoned rollouts).
 - `ingester.ring.replication_factor: 1` (single ingester).
-- `query_scheduler` kept at 1 replica — the base config points the querier's
+- `query_scheduler` kept at 1 replica - the base config points the querier's
   `frontend_worker` at the scheduler, so removing it hangs the read path.
 - `alertmanager`, `overrides_exporter`, and all memcached caches disabled; the `ruler`
   is enabled (see below).
 - Bundled MinIO provides object storage.
 
 Result: distributor, ingester, querier, query-frontend, query-scheduler, compactor,
-store-gateway, gateway, ruler, minio — one pod each instead of the ~17 the defaults render.
+store-gateway, gateway, ruler, minio - one pod each instead of the ~17 the defaults render.
 
 ## Metrics collection & alerting
 
@@ -51,7 +51,7 @@ Grafana panels, and the otel-demo app all flow the same way; this section covers
 metrics and alerting path specifically.
 
 kube-prometheus-stack (KPS) deploys Alertmanager, the Prometheus operator,
-kube-state-metrics, and node-exporter — **no Prometheus server**. See
+kube-state-metrics, and node-exporter - **no Prometheus server**. See
 [`helm/kube-prometheus-stack/values.yaml`](../helm/kube-prometheus-stack/values.yaml). The
 operator's job is to own the CRDs (`ServiceMonitor`/`PodMonitor`/`PrometheusRule`); it
 doesn't need its own reconcile loop running for what follows, because
@@ -69,7 +69,7 @@ doesn't need its own reconcile loop running for what follows, because
   [`helm/mimir/values.yaml`](../helm/mimir/values.yaml)) evaluates those rules and fires
   alerts to the KPS-deployed Alertmanager (`structuredConfig.ruler.alertmanager_url` points
   there, since the chart's own default targets Mimir's bundled Alertmanager, which stays
-  disabled — there's only ever one Alertmanager in this demo).
+  disabled - there's only ever one Alertmanager in this demo).
 - Grafana's Mimir datasource turns on `jsonData.manageAlerts: true` (see
   [`helm/grafana/values.yaml`](../helm/grafana/values.yaml)), so **Grafana Alerting**
   shows and manages those Mimir-evaluated rules.
@@ -80,8 +80,8 @@ doesn't need its own reconcile loop running for what follows, because
   (`monitoring.coreos.com`).
 
 **What KPS deploys**: Alertmanager, the Prometheus operator, kube-state-metrics, and
-node-exporter. **What we disable**: the bundled Grafana (`grafana.enabled: false` — Grafana
-has its own release) and the Windows exporter (`windowsMonitoring.enabled: false` — no
+node-exporter. **What we disable**: the bundled Grafana (`grafana.enabled: false` - Grafana
+has its own release) and the Windows exporter (`windowsMonitoring.enabled: false` - no
 Windows nodes). The `kubeControllerManager` / `kubeScheduler` / `kubeEtcd` / `kubeProxy`
 component monitors are also disabled because kind doesn't expose those endpoints for
 scraping, so they'd otherwise sit permanently "down".
@@ -91,15 +91,15 @@ Since every other chart's values and Alloy reference those CRDs, `make stack` de
 first.
 
 > An alternate metrics-collection mode that runs kube-prometheus-stack's own Prometheus
-> server instead of Alloy is available for specific testing scenarios — see
+> server instead of Alloy is available for specific testing scenarios - see
 > [metrics-modes.md](./metrics-modes.md).
 
 ## Exposing the UIs: NodePort + extraPortMappings
 
 kind provisions no cloud controller, so a `type: LoadBalancer` service never gets an
-external IP — it sits `<pending>`. A load balancer (e.g. MetalLB) *can* hand out a VIP,
+external IP - it sits `<pending>`. A load balancer (e.g. MetalLB) *can* hand out a VIP,
 but that VIP lives on the kind/Podman container network, which on **WSL2 + rootless
-Podman is not routable from the host** — so a browser can't reach it. Podman only
+Podman is not routable from the host** - so a browser can't reach it. Podman only
 publishes explicitly mapped ports to the host's loopback.
 
 So we expose the UIs the way that actually works on this setup:
@@ -111,7 +111,7 @@ So we expose the UIs the way that actually works on this setup:
   (30093 for Alertmanager), and
   [`helm/headlamp/values.yaml`](../helm/headlamp/values.yaml) (30466). The Alloy chart also
   passes `nodePort` through on `extraPorts`, but the OTLP ports are deliberately left
-  unpinned — they stay cluster-internal.
+  unpinned - they stay cluster-internal.
 - [`kind/cluster.yaml`](../kind/cluster.yaml) `extraPortMappings` publish those node ports
   on the host: `3000 -> 30000` (Grafana), `12345 -> 30345` (Alloy), `9093 -> 30093`
   (Alertmanager), `4466 -> 30466` (Headlamp), `8080 -> 30080` (otel-demo). kind wires the
@@ -142,26 +142,26 @@ telemetry view. See [`helm/headlamp/values.yaml`](../helm/headlamp/values.yaml).
 - **No-login demo mode**: `config.unsafeUseServiceAccountToken: true` authenticates every
   visitor as the pod's ServiceAccount, so the NodePort UI opens straight in with no token
   prompt. The chart's `clusterRoleBinding` binds that ServiceAccount to **cluster-admin**.
-  Together this is effectively unauthenticated cluster-admin — acceptable only because the
+  Together this is effectively unauthenticated cluster-admin - acceptable only because the
   kind cluster is local and throwaway; a shared deployment must swap this for OIDC or an
   auth proxy.
-- **Stateless**: no persistence — it's a read/write window onto live cluster state.
+- **Stateless**: no persistence - it's a read/write window onto live cluster state.
 
 ## Grafana: Operator-managed via CRDs
 
 Grafana is managed by the [Grafana Operator](https://github.com/grafana/grafana-operator)
 (`grafana/grafana-operator`, deployed by `make grafana-operator`): a `Grafana` custom
-resource stands up the instance and `GrafanaDatasource` CRs provision each datasource —
+resource stands up the instance and `GrafanaDatasource` CRs provision each datasource -
 no Helm `values.yaml` datasource blob, no imperative bootstrap script. The first-party
 chart [`helm/grafana`](../helm/grafana) renders those CRs (plus a bit of RBAC and a
 ConfigMap); the Operator owns the Deployment.
 
 - **Everything provisioned as CRs, not files**: `templates/datasources.yaml` renders one
   `GrafanaDatasource` per entry in `values.yaml`'s `datasources` list (`uid`, `type`,
-  `url`, `isDefault`, `jsonData` — including the Tempo/Loki/Mimir/Pyroscope cross-signal
+  `url`, `isDefault`, `jsonData` - including the Tempo/Loki/Mimir/Pyroscope cross-signal
   correlations). The Operator reconciles each straight through the Grafana API rather than
-  writing a provisioning file, so `instanceSelector` — a label match against the `Grafana`
-  CR (`grafana-instance: "grafana"`, see `templates/_helpers.tpl`) — is how each CR finds
+  writing a provisioning file, so `instanceSelector` - a label match against the `Grafana`
+  CR (`grafana-instance: "grafana"`, see `templates/_helpers.tpl`) - is how each CR finds
   "its" Grafana instance instead of a file path.
 - **Dashboards arrive via the k8s-sidecar ConfigMap convention**: kube-prometheus-stack
   ships its bundled default dashboards as ConfigMaps labelled `grafana_dashboard: "1"`.
@@ -170,32 +170,32 @@ ConfigMap); the Operator owns the Deployment.
   [`templates/grafana.yaml`](../helm/grafana/templates/grafana.yaml) adds a
   `kiwigrid/k8s-sidecar` container (`quay.io/kiwigrid/k8s-sidecar:2.8.1`) that watches
   every namespace for that label and drops matches into a
-  `path: /var/lib/grafana/dashboards` file provider — plus a `ClusterRole`/
+  `path: /var/lib/grafana/dashboards` file provider - plus a `ClusterRole`/
   `ClusterRoleBinding` (`templates/rbac-sidecar.yaml`) granting the Grafana pod's
   ServiceAccount (`<release>-sa`, an Operator naming convention) permission to list/watch
   ConfigMaps cluster-wide.
-- **Service overrides via strategic-merge patch — keyed by `port`, not `name`**:
+- **Service overrides via strategic-merge patch - keyed by `port`, not `name`**:
   `spec.service.spec` merge-patches onto the Operator's default Service
-  (`corev1.ServiceSpec`), which is how the `nodePort: 30000` pin — needed for the
+  (`corev1.ServiceSpec`), which is how the `nodePort: 30000` pin - needed for the
   `kind/cluster.yaml` `extraPortMappings` `3000 -> 30000` mapping, same as every other UI
-  in this repo — is applied on top of the Operator-generated Service. The list-merge key
-  for `Service.spec.ports` is the Kubernetes API's own `port` field, *not* `name` — so
+  in this repo - is applied on top of the Operator-generated Service. The list-merge key
+  for `Service.spec.ports` is the Kubernetes API's own `port` field, *not* `name` - so
   [`templates/grafana.yaml`](../helm/grafana/templates/grafana.yaml)'s override sets
   `port: 3000` to match the Operator's default exactly. Get that wrong (e.g. pick a
   different port number) and the override becomes a *second* list entry instead of merging
-  into the first — and since both would share `name: "grafana"`, the API rejects the
+  into the first - and since both would share `name: "grafana"`, the API rejects the
   Service outright (`spec.ports[1].name: Duplicate value: "grafana"`). The override also
   repeats every field of that port (`protocol`, `targetPort`), not just the one being
   changed (`nodePort`): once a list item *is* correctly matched, the merge is a full
   field-level overwrite, so any field the override's JSON doesn't repeat serializes as its
   Go zero value and clobbers the original (omitting `targetPort` would blank it to `0`).
-- **Service name**: the Operator names the generated Service `"<release>-service"` —
-  `grafana-service`, not `grafana` — a naming convention this chart doesn't control.
+- **Service name**: the Operator names the generated Service `"<release>-service"` -
+  `grafana-service`, not `grafana` - a naming convention this chart doesn't control.
   [`scripts/validate.sh`](../scripts/validate.sh) references it by that name.
 - **`helm --wait` doesn't know about the Grafana CR**: it only tracks resource kinds Helm
   understands the readiness of (Deployments, Services, ...); a bare `Grafana`/
   `GrafanaDatasource` CR isn't one of them, and the Operator's own `GrafanaReady`
-  condition just means "the Operator finished submitting the objects it manages" — not
+  condition just means "the Operator finished submitting the objects it manages" - not
   "the Grafana pod is actually up." The Makefile's `grafana` target compensates with an
   explicit `kubectl wait --for=condition=Available` against the Operator-created
   `grafana-deployment` Deployment, after first polling for it to exist (it's created
@@ -205,7 +205,7 @@ ConfigMap); the Operator owns the Deployment.
 
 ## Dashboard backend: Grafana vs. Perses
 
-`DASHBOARD_BACKEND=perses` (opt-in — see [dashboard-backends.md](./dashboard-backends.md))
+`DASHBOARD_BACKEND=perses` (opt-in - see [dashboard-backends.md](./dashboard-backends.md))
 swaps Grafana for [Perses](https://perses.dev/), a CNCF sandbox dashboarding
 tool. The design deliberately mirrors the Grafana setup above: an Operator
 that reconciles CRDs into a running instance, rather than a values-driven
@@ -216,7 +216,7 @@ chart.
   (`helm/perses-operator`, deployed by `make perses-operator`) plays the role
   of the Grafana Operator; [`helm/perses`](../helm/perses) plays the role of
   `helm/grafana`, rendering a `Perses` instance CR, four
-  `PersesGlobalDatasource` CRs (Mimir/Loki/Tempo/Pyroscope — the same
+  `PersesGlobalDatasource` CRs (Mimir/Loki/Tempo/Pyroscope - the same
   in-cluster URLs Grafana's datasources use, minus Alertmanager, which Perses
   has no dedicated plugin for), and every vendored dashboard CR.
 - **No cert-manager dependency.** `perses-operator`'s webhook (used only for
@@ -224,9 +224,9 @@ chart.
   its TLS cert. `certManager.enable: false`
   ([`helm/perses-operator/values.yaml`](../helm/perses-operator/values.yaml))
   falls back to a self-signed cert the chart generates itself at install
-  time — no new cluster-wide dependency, at the cost of the CRD serving
+  time - no new cluster-wide dependency, at the cost of the CRD serving
   without a conversion webhook. That's why every CR this repo writes for
-  Perses (datasources, dashboards) is written directly in `v1alpha2` — nothing
+  Perses (datasources, dashboards) is written directly in `v1alpha2` - nothing
   here ever relies on the operator auto-converting a `v1alpha1` object.
 - **Dashboards are vendored, not chart-bundled.** Unlike kube-prometheus-stack's
   bundled Grafana dashboards (delivered as ConfigMaps a sidecar picks up),
@@ -238,18 +238,18 @@ chart.
   The rewrite is necessary, not cosmetic: upstream ships these as `v1alpha1`
   objects (dashboard body directly under `spec:`), and with the conversion
   webhook disabled (above), a `v1alpha1` object would be stored as-is under
-  the `v1alpha2` schema — which nests that same body one level deeper, under
-  `spec.config:` — and the operator would read back an empty dashboard. The
+  the `v1alpha2` schema - which nests that same body one level deeper, under
+  `spec.config:` - and the operator would read back an empty dashboard. The
   script also escapes any literal `{{...}}` already present in dashboard
   content (Perses' own series-name/legend templating syntax, e.g.
   `{{instance}}`) so Helm's Go templating doesn't try to parse it as an
-  action — only the script's own injected `{{ .Release.* }}` expressions
+  action - only the script's own injected `{{ .Release.* }}` expressions
   (namespace, instance-selector label) are meant to be live Helm templating.
 - **`prometheus-datasource` is a load-bearing name.** Every vendored
   dashboard's `PrometheusTimeSeriesQuery` hardcodes
   `datasource: {kind: PrometheusDatasource, name: prometheus-datasource}`, so
   [`helm/perses/values.yaml`](../helm/perses/values.yaml) names the Mimir
-  `PersesGlobalDatasource` exactly `prometheus-datasource` — that's what makes
+  `PersesGlobalDatasource` exactly `prometheus-datasource` - that's what makes
   all 41 vendored dashboards resolve with zero per-dashboard edits.
 - **A second, hand-rolled Service for NodePort.** The `Perses` CR's own
   `spec.service` only supports `name`/`annotations`; the Operator's own
@@ -258,12 +258,12 @@ chart.
   (`controllers/perses/service_controller.go`'s `serviceNeedsUpdate`). So
   [`helm/perses/templates/perses.yaml`](../helm/perses/templates/perses.yaml)
   adds a second Service (`perses-nodeport`) selecting on the same
-  `perses-instance` label the Operator merges onto the instance's pods — the
+  `perses-instance` label the Operator merges onto the instance's pods - the
   Perses-side analogue of the Grafana Operator Service-merge quirk documented
   above.
 - **Namespace maps 1:1 to a Perses "project."** The dashboard controller
   auto-creates a Perses `Project` named after whatever Kubernetes namespace
-  the `PersesDashboard` CR lives in — so every vendored dashboard, deployed
+  the `PersesDashboard` CR lives in - so every vendored dashboard, deployed
   into the `observability` namespace like everything else in this demo, lands
   in an `observability` project with no separate provisioning step.
 - **No AI assistant.** Perses has no LLM/Graft-equivalent plugin in this demo,
@@ -277,7 +277,7 @@ by the [`helm/grafana`](../helm/grafana) chart and talk to an Azure AI Foundry
 endpoint. See [`helm/grafana/values.yaml`](../helm/grafana/values.yaml)'s
 `llm`/`graft` blocks.
 
-- [**grafana-llm-app**](https://grafana.com/grafana/plugins/grafana-llm-app/) —
+- [**grafana-llm-app**](https://grafana.com/grafana/plugins/grafana-llm-app/) -
   Grafana's official LLM plugin, the model gateway. It's provisioned with
   `provider: custom` (OpenAI wire format) pointed at Azure AI Foundry
   (`https://dvaz-tests-resource.services.ai.azure.com/openai`, the plugin
@@ -285,7 +285,7 @@ endpoint. See [`helm/grafana/values.yaml`](../helm/grafana/values.yaml)'s
   `gpt-5.4-mini` deployment. The API key comes from `AZURE_LLM_API_KEY` in
   `.env` (gitignored) and is delivered to the plugin via `secureJsonData`.
 - [**Graft**](https://github.com/vikshana/vikshana-graft-app)
-  (`vikshana-graft-app`) — a community "AI Assistant for Grafana" app plugin
+  (`vikshana-graft-app`) - a community "AI Assistant for Grafana" app plugin
   that layers a natural-language chat UI on top of grafana-llm-app, using
   Grafana's built-in MCP tools (run in-process against the logged-in session) to
   query dashboards, metrics, logs, traces, and alerts. Find it in the Grafana
@@ -299,10 +299,10 @@ How the chart wires the plugins (see
   a plain catalog id; Graft is **not in the catalog**, so it's installed from a
   release-zip URL in `<url>;<plugin-id>` form. Graft is also **unsigned**, so
   its id is added to `allow_loading_unsigned_plugins` in the `Grafana` CR config
-  — Grafana refuses to load unsigned plugins otherwise.
+  - Grafana refuses to load unsigned plugins otherwise.
 - **Configured via file-based plugin provisioning**: a ConfigMap
   (`grafana-plugins-provisioning`) is mounted at
-  `/etc/grafana/provisioning/plugins` — the same ConfigMap mechanism the chart
+  `/etc/grafana/provisioning/plugins` - the same ConfigMap mechanism the chart
   uses for dashboards. It holds the LLM plugin's provider config (including the
   API key, in `secureJsonData`) and a stanza that enables the Graft app by
   default. Both plugin blocks are gated on their `enabled` values, so setting
@@ -315,13 +315,13 @@ How the chart wires the plugins (see
 
 > An opt-in mode that instead points the plugin at a local, key-less
 > [Ollama](https://github.com/otwld/ollama-helm) deployment is available for
-> testing scenarios — see [llm-backends.md](./llm-backends.md).
+> testing scenarios - see [llm-backends.md](./llm-backends.md).
 
 Separately, Alloy's OTLP receiver also forwards **logs** (not just traces) to
-Loki — any in-cluster workload that emits logs over OTLP (rather than only
+Loki - any in-cluster workload that emits logs over OTLP (rather than only
 stdout) lands there. [`helm/alloy/values.yaml`](../helm/alloy/values.yaml) wires
 a `logs` output -> `otelcol.processor.attributes` (tags
-`service.name`/`service.namespace` as `loki.resource.labels` hints —
+`service.name`/`service.namespace` as `loki.resource.labels` hints -
 `otelcol.exporter.loki` doesn't promote OTLP attributes to Loki labels on its
 own) -> `otelcol.exporter.loki` -> the same `loki.write` receiver pod-tailed
 logs already use.
@@ -346,7 +346,7 @@ Alloy config lives in [`helm/alloy/values.yaml`](../helm/alloy/values.yaml):
 
 ### Opt-in scraping annotations
 
-- Metrics: no annotations — Alloy scrapes each component through the ServiceMonitor its
+- Metrics: no annotations - Alloy scrapes each component through the ServiceMonitor its
   chart emits (see the metrics section above).
 - Profiles: `pyroscope.io/scrape: "true"` (+ optional `pyroscope.io/port`) on the pod.
 - Logs are collected for all pods automatically; traces are pushed by the app.
@@ -356,7 +356,7 @@ Alloy config lives in [`helm/alloy/values.yaml`](../helm/alloy/values.yaml):
 - **Chart repos**: Tempo is installed from the **`grafana-community`** repo
   (`grafana-community/tempo` 2.2.3, "single binary mode") because the classic
   `grafana/tempo` chart in the `grafana` repo is deprecated. Grafana is managed by the
-  Grafana Operator, not a Helm chart — see
+  Grafana Operator, not a Helm chart - see
   [Grafana: Operator-managed via CRDs](#grafana-operator-managed-via-crds). kube-prometheus-stack
   comes from the **`prometheus-community`** repo. Mimir, Loki, Pyroscope, Alloy, and the
   Grafana Operator come from the `grafana` repo. `make repos` registers all of these

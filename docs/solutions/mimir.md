@@ -1,7 +1,7 @@
 # Mimir
 
 **In one line:** the long-term, horizontally scalable home for your Prometheus
-metrics — think "Prometheus storage that never fills up."
+metrics - think "Prometheus storage that never fills up."
 
 > Chart: `grafana/mimir-distributed` (v6.1.0) ·
 > config: [`helm/mimir/values.yaml`](../../helm/mimir/values.yaml) ·
@@ -16,7 +16,7 @@ cheap **object storage** (S3, GCS, MinIO…) and can ingest and query at very
 large scale.
 
 Crucially, it speaks the **same PromQL and remote-write protocol** as
-Prometheus, so it's a drop-in long-term backend — Prometheus scrapes and
+Prometheus, so it's a drop-in long-term backend - Prometheus scrapes and
 remote-writes to Mimir, Grafana queries Mimir with the exact PromQL you already
 know.
 
@@ -26,8 +26,8 @@ know.
   `/api/v1/push`; Grafana reads them back via a Prometheus-compatible query API.
 - **Object storage.** Metric blocks live in an object store, so retention is
   bounded by bucket size and cost, not by a node's disk.
-- **Microservices architecture.** Mimir splits into components — distributor,
-  ingester, querier, query-frontend, compactor, store-gateway — that scale
+- **Microservices architecture.** Mimir splits into components - distributor,
+  ingester, querier, query-frontend, compactor, store-gateway - that scale
   independently. This is what lets it grow, but it's also why Mimir is the
   heaviest tool in this demo.
 
@@ -40,12 +40,12 @@ datasource points at Mimir.
 Mimir's **ruler** is enabled: Alloy syncs `PrometheusRule` objects into it, the
 ruler evaluates them, and fires alerts to the kube-prometheus-stack Alertmanager
 (`structuredConfig.ruler.alertmanager_url` is pointed there explicitly, since
-Mimir's own bundled Alertmanager component stays disabled — there's only one
+Mimir's own bundled Alertmanager component stays disabled - there's only one
 Alertmanager in this demo). See
 [architecture.md](../architecture.md#metrics-collection--alerting).
 
 There's no official "single binary" Mimir chart, so we run the microservices
-chart at its **minimum viable scale** — one replica per component, no zone
+chart at its **minimum viable scale** - one replica per component, no zone
 awareness, no Kafka, caches off, with bundled **MinIO** as the object store.
 That's still ~9-10 pods (vs. the ~17 the defaults render). The full reasoning
 is in [architecture.md](../architecture.md#mimir-the-exception).
@@ -59,13 +59,13 @@ is in [architecture.md](../architecture.md#mimir-the-exception).
   service-graph and RED panels.
 
 ![Grafana Metrics Drilldown over the Mimir datasource, grouping metrics by job into alloy, apiserver, and coredns panels](../images/grafana-drilldown-metrics.png)
-*Metrics Drilldown pointed at the Mimir datasource — the remote-written metrics from every component, grouped by `job` and browsable without writing PromQL.*
+*Metrics Drilldown pointed at the Mimir datasource - the remote-written metrics from every component, grouped by `job` and browsable without writing PromQL.*
 
 ## Why it matters
 
 Metrics are only useful if you can keep them long enough to spot trends and
 compare week-over-week. Mimir gives you Prometheus's query language with
-cloud-scale storage and retention behind it — without changing how you scrape or
+cloud-scale storage and retention behind it - without changing how you scrape or
 query.
 
 ## Learn more

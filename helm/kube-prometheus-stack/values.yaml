@@ -1,16 +1,16 @@
-# kube-prometheus-stack — Alertmanager, the Prometheus Operator,
+# kube-prometheus-stack - Alertmanager, the Prometheus Operator,
 # kube-state-metrics and node-exporter. (+ Prometheus itself, in the
-# METRICS_MODE=prometheus mode — see values-prometheus-metrics.yaml.)
+# METRICS_MODE=prometheus mode - see values-prometheus-metrics.yaml.)
 #
 # Default (METRICS_MODE=alloy): Prometheus itself is NOT deployed. The
 # Operator stays only to own the CRDs (ServiceMonitor/PodMonitor/PrometheusRule)
-# that every other chart's values reference — Alloy (helm/alloy/values.yaml)
+# that every other chart's values reference - Alloy (helm/alloy/values.yaml)
 # reads those CRDs directly with its own Kubernetes client, scrapes, and
 # remote-writes to Mimir, and syncs PrometheusRules into Mimir's ruler, which
 # evaluates them and fires to the Alertmanager deployed here.
 #
 # METRICS_MODE=prometheus is an opt-in mode for specific testing scenarios,
-# where Prometheus itself scrapes and evaluates rules — see
+# where Prometheus itself scrapes and evaluates rules - see
 # values-prometheus-metrics.yaml and docs/metrics-modes.md.
 #
 # Grafana and the Windows exporter are intentionally NOT deployed here: Grafana
@@ -73,8 +73,8 @@ alertmanager:
   # separate Watchdog route; here we collapse that into one catch-all so no
   # alert is ever dropped or filtered out before it reaches Alertmanager's
   # alert store. That matters because whatever reads Alertmanager's alert set
-  # — Grafana Alerting via the Mimir datasource by default, or Karma
-  # (`make karma`) in the METRICS_MODE=prometheus mode — polls straight from
+  # - Grafana Alerting via the Mimir datasource by default, or Karma
+  # (`make karma`) in the METRICS_MODE=prometheus mode - polls straight from
   # Alertmanager's API, so this default route is what guarantees all firing
   # alerts, of every severity and from every namespace, are visible there.
   config:
@@ -86,7 +86,7 @@ alertmanager:
       receiver: catch-all
       # Explicitly empty. Helm deep-merges this `config` onto the chart's
       # defaults, and the stock config ships a sub-route sending Watchdog to a
-      # "null" receiver — which our `receivers` below does not define. Left
+      # "null" receiver - which our `receivers` below does not define. Left
       # unset, that sub-route survives the merge and Alertmanager rejects the
       # config ("undefined receiver null"). Clearing it sends *everything*,
       # Watchdog included, to catch-all.
@@ -94,7 +94,7 @@ alertmanager:
     receivers:
       # A receiver with no notifier config: Alertmanager still accepts, groups
       # and stores every alert (so Karma sees them) without forwarding them to
-      # an external destination — there's nowhere to page in a local demo.
+      # an external destination - there's nowhere to page in a local demo.
       - name: catch-all
   alertmanagerSpec:
     # Ephemeral for the demo (no PVC).
@@ -102,7 +102,7 @@ alertmanager:
     resources:
       requests: { cpu: 25m, memory: 64Mi }
 
-# ---- Prometheus: disabled by default (Alloy scrapes instead — see
+# ---- Prometheus: disabled by default (Alloy scrapes instead - see
 # helm/alloy/values.yaml). Enabled only via the values-prometheus-metrics.yaml
 # overlay (METRICS_MODE=prometheus). ----
 prometheus:

@@ -5,13 +5,13 @@ Grafana's AI assistant can run with no external API key.
 
 > Chart: `ollama-helm/ollama` (1.65.0) ·
 > config: [`helm/ollama/values.yaml`](../../helm/ollama/values.yaml) ·
-> access: cluster-internal only — no web UI
+> access: cluster-internal only - no web UI
 
 > [!NOTE]
 > **Opt-in, not deployed by default.** Grafana's Graft AI assistant talks to
 > an Azure AI Foundry endpoint by default; Ollama is an alternate, key-less
 > model backend for testing scenarios. Deploy it with
-> `make up LLM_BACKEND=ollama` — see [llm-backends.md](../llm-backends.md). It's
+> `make up LLM_BACKEND=ollama` - see [llm-backends.md](../llm-backends.md). It's
 > the heaviest component in the stack, so expect that first `make up` to take
 > a while (multiple CPUs, several GiB of RAM, ~2GB model pull).
 
@@ -26,7 +26,7 @@ endpoint and get a response from a model running right there in the pod.
 ## Where it fits among the others
 
 Ollama isn't part of the four-signal observability pipeline (metrics, logs,
-traces, profiles) — it's the **model backend for Grafana's Graft AI
+traces, profiles) - it's the **model backend for Grafana's Graft AI
 assistant**. Grafana's `grafana-llm-app` plugin points at Ollama's
 OpenAI-compatible API (see [`helm/grafana/values.yaml`](../../helm/grafana/values.yaml)),
 and the Graft app plugin chats through that. Everywhere else in this demo,
@@ -41,14 +41,14 @@ means an inference server:
 ## How we use it in this demo
 
 Ollama is deployed by `make ollama` (folded into `make up LLM_BACKEND=ollama`)
-into the `observability` namespace — the same namespace as everything else in
+into the `observability` namespace - the same namespace as everything else in
 this demo, kept single-namespace for simplicity.
 
 - **`llama3.2:3b`, pulled at pod startup.** [`helm/ollama/values.yaml`](../../helm/ollama/values.yaml)
   lists `llama3.2:3b` under both `ollama.models.pull` and `ollama.models.run`: pulled
   (~2GB download) and then loaded into memory so the first request from
   Graft isn't slowed by a cold load. This happens via a `postStart` lifecycle
-  hook — Kubernetes doesn't mark the container `Running` until it completes,
+  hook - Kubernetes doesn't mark the container `Running` until it completes,
   so the `ollama` Makefile target uses a generous `OLLAMA_TIMEOUT` (default
   `20m`) rather than the stack's usual `HELM_TIMEOUT`. `OLLAMA_KEEP_ALIVE=24h`
   (set via `extraEnv`) keeps the model resident so it doesn't unload after the
@@ -61,7 +61,7 @@ this demo, kept single-namespace for simplicity.
   vs ~115s), staying inside that timeout while remaining capable enough for
   Graft's tool-calling.
 - **CPU only, no persistence.** WSL2 exposes no GPU render node (`/dev/dri`) or
-  NPU (`/dev/accel`) into Linux — only `/dev/dxg` — and Ollama supports only
+  NPU (`/dev/accel`) into Linux - only `/dev/dxg` - and Ollama supports only
   NVIDIA/AMD GPUs regardless, so inference is CPU-bound (the pod is given a
   generous CPU slice in `resources`). No PersistentVolumeClaim either: model
   files live in the container filesystem and get re-pulled on every pod start.
@@ -69,13 +69,13 @@ this demo, kept single-namespace for simplicity.
   the node container's own filesystem), so this demo accepts the re-pull cost
   instead.
 - **Cluster-internal only.** Unlike Grafana/Alloy/Headlamp/etc., Ollama gets
-  no NodePort or `localhost` URL — nothing outside the cluster needs to talk
+  no NodePort or `localhost` URL - nothing outside the cluster needs to talk
   to it directly. Grafana reaches it at
   `ollama.observability.svc.cluster.local:11434`.
 
 ## Try it
 
-There's no UI of its own — the way to "see" it is through Grafana's **Graft**
+There's no UI of its own - the way to "see" it is through Grafana's **Graft**
 assistant (find it in the Grafana nav), which chats through it. To talk to
 Ollama directly instead:
 
@@ -93,7 +93,7 @@ curl http://localhost:11434/api/generate -d '{
 Wiring an AI assistant to a paid, hosted model means every run needs an API
 key and incurs a cost. A local model removes that friction entirely:
 `make up LLM_BACKEND=ollama` gets you a working model backend, no signup, no
-key, no bill — a self-contained option with zero external dependencies for
+key, no bill - a self-contained option with zero external dependencies for
 testing scenarios where that matters. The tradeoff is capability and speed (a
 CPU-run `llama3.2:3b` is slower and less capable than a frontier hosted model).
 
@@ -101,5 +101,5 @@ CPU-run `llama3.2:3b` is slower and less capable than a frontier hosted model).
 
 - [Ollama](https://ollama.com/)
 - [ollama-helm chart](https://github.com/otwld/ollama-helm)
-- [Grafana LLM plugin](https://grafana.com/docs/grafana-cloud/machine-learning/llm/) — how Grafana connects to this
-- [Graft](https://github.com/vikshana/vikshana-graft-app) — the Grafana AI assistant that chats through it
+- [Grafana LLM plugin](https://grafana.com/docs/grafana-cloud/machine-learning/llm/) - how Grafana connects to this
+- [Graft](https://github.com/vikshana/vikshana-graft-app) - the Grafana AI assistant that chats through it

@@ -1,15 +1,15 @@
-# Perses Operator (https://github.com/perses/perses-operator) — the
+# Perses Operator (https://github.com/perses/perses-operator) - the
 # controller that reconciles the CRs in helm/perses (Perses, PersesGlobalDatasource,
 # PersesDashboard) into a running Perses instance. Deployed once, cluster-wide,
-# before helm/perses's CRs can be applied — see the Makefile's
+# before helm/perses's CRs can be applied - see the Makefile's
 # `perses-operator` -> `perses` ordering. Only deployed when
-# DASHBOARD_BACKEND=perses — see docs/dashboard-backends.md.
+# DASHBOARD_BACKEND=perses - see docs/dashboard-backends.md.
 #
 # Same operator-managed-CRD posture as the Grafana Operator (helm/grafana-operator)
 # this demo uses by default.
 
 # (kubeRbacProxy's sidecar resources are left at the chart's own minimal
-# defaults — already requests: {cpu: 5m, memory: 64Mi}.)
+# defaults - already requests: {cpu: 5m, memory: 64Mi}.)
 manager:
   resources:
     requests: { cpu: 50m, memory: 64Mi }
@@ -18,10 +18,10 @@ manager:
 # The chart's default (true) requires cert-manager installed in the cluster to
 # issue the webhook server's TLS cert. With it false, the chart falls back to
 # a self-signed cert it generates itself at install time (see
-# templates/webhook/self-signed-cert.yaml upstream) — no new cluster-wide
+# templates/webhook/self-signed-cert.yaml upstream) - no new cluster-wide
 # dependency for this demo. The only thing that cert otherwise buys is the
 # CRD's v1alpha1<->v1alpha2 conversion webhook, which this demo doesn't need:
-# helm/perses's CRs (and the vendored community-mixins dashboards — see
+# helm/perses's CRs (and the vendored community-mixins dashboards - see
 # scripts/vendor-perses-dashboards.py) are written directly in v1alpha2.
 # Upstream's own chart README calls this "not recommended for production",
 # but it's the same posture this demo already takes with Grafana's
@@ -31,7 +31,7 @@ certManager:
 
 # Emit a ServiceMonitor so the metrics collector (Alloy by default, or
 # kube-prometheus-stack's Prometheus in the METRICS_MODE=prometheus mode)
-# scrapes the operator itself — same convention as
+# scrapes the operator itself - same convention as
 # helm/grafana-operator/values.yaml's `serviceMonitor.enabled: true`.
 prometheus:
   enable: true

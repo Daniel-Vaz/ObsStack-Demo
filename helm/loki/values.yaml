@@ -1,4 +1,4 @@
-# Loki (logs) — single-binary (monolithic) mode, filesystem storage.
+# Loki (logs) - single-binary (monolithic) mode, filesystem storage.
 #
 # Write path (Alloy):            http://loki:3100/loki/api/v1/push
 # Read  path (Grafana):          http://loki:3100
@@ -32,14 +32,14 @@ loki:
 
   # ---- Ruler: log-based alerting ------------------------------------------
   # Loki's ruler evaluates LogQL alerting rules on a schedule and fires the
-  # results into Alertmanager — the same Alertmanager kube-prometheus-stack runs,
+  # results into Alertmanager - the same Alertmanager kube-prometheus-stack runs,
   # so Loki alerts land next to the metric-based ones and show up in Grafana
   # Alerting.
   #
   # Rules are provisioned by the chart's rules sidecar (see `sidecar.rules`
   # below): it watches for ConfigMaps labelled `loki_rule` and drops their files
   # into `/rules`, which is the ruler's local store. With auth disabled every
-  # tenant is "fake", so files must land under `/rules/fake/` — the ConfigMap
+  # tenant is "fake", so files must land under `/rules/fake/` - the ConfigMap
   # uses a `k8s-sidecar-target-directory` annotation to steer them there.
   rulerConfig:
     wal:
@@ -61,7 +61,7 @@ singleBinary:
   resources:
     requests: { cpu: 100m, memory: 256Mi }
 
-# Disable the scalable-mode workloads — we only run the single binary.
+# Disable the scalable-mode workloads - we only run the single binary.
 read:
   replicas: 0
 write:
@@ -99,7 +99,7 @@ sidecar:
     folderAnnotation: k8s-sidecar-target-directory
 
 # Emit a ServiceMonitor so the metrics collector scrapes Loki. Loki's own
-# self-monitoring (its bundled agent) stays off — Alloy is the scraper (or
+# self-monitoring (its bundled agent) stays off - Alloy is the scraper (or
 # Prometheus in the METRICS_MODE=prometheus mode).
 monitoring:
   selfMonitoring:

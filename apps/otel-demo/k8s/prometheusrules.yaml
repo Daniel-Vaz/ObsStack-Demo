@@ -1,14 +1,14 @@
 # Metric-based alerts on the demo's simulated errors.
 #
 # Alloy discovers PrometheusRules in every namespace and syncs them into Mimir's
-# ruler, which evaluates them — so this is picked up with no change to the stack.
+# ruler, which evaluates them - so this is picked up with no change to the stack.
 # Firing alerts flow to Alertmanager and show up in Grafana Alerting.
 #
-# Drive them from the web UI at :8080 — set "simulated errors" to e.g. 30% and
+# Drive them from the web UI at :8080 - set "simulated errors" to e.g. 30% and
 # toggle Auto load. The counters below come from the app:
-#   demo_orders_total          (frontend) — successful orders
-#   demo_order_errors_total    (frontend) — orders that failed end-to-end
-#   demo_payment_failures_total(payment)  — simulated card declines
+#   demo_orders_total          (frontend) - successful orders
+#   demo_order_errors_total    (frontend) - orders that failed end-to-end
+#   demo_payment_failures_total(payment)  - simulated card declines
 # and http_server_request_duration_seconds_count is otelhttp's per-request metric,
 # carrying the response status code.
 apiVersion: monitoring.coreos.com/v1
@@ -57,7 +57,7 @@ spec:
               payment is returning simulated declines at
               {{ $value | humanize }}/s over the last 5m.
 
-        # 5xx responses seen by otelhttp on any demo service — a generic
+        # 5xx responses seen by otelhttp on any demo service - a generic
         # "something is erroring" signal independent of the business counters.
         - alert: OtelDemoHTTP5xxErrors
           expr: |

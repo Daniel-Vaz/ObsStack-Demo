@@ -1,7 +1,7 @@
 # Alloy
 
 **In one line:** one collector agent that gathers logs, traces, and profiles
-(and metrics too) and forwards each to the right backend — the "universal
+(and metrics too) and forwards each to the right backend - the "universal
 telemetry pipeline."
 
 > Chart: `grafana/alloy` (v1.10.0, DaemonSet) ·
@@ -17,7 +17,7 @@ Collector plus Grafana's own pipeline components, so it speaks both **OTLP** and
 the Prometheus/Loki/Pyroscope-native protocols.
 
 You configure it as a **pipeline**: small components wired together, each doing
-one step — *discover* targets, *receive* or *scrape* data, *process* it, then
+one step - *discover* targets, *receive* or *scrape* data, *process* it, then
 *export* it downstream. The output of one component feeds the input of the next,
 like Unix pipes for telemetry.
 
@@ -29,14 +29,14 @@ like Unix pipes for telemetry.
   *and* a puller (it scrapes pod logs and pprof endpoints).
 - **Components as a pipeline.** A config is a graph of typed components
   (`otelcol.receiver.otlp`, `loki.source.kubernetes`, `pyroscope.scrape`, …)
-  connected explicitly — readable and easy to reason about.
+  connected explicitly - readable and easy to reason about.
 - **Decouples apps from backends.** The app hands telemetry to Alloy; Alloy
   decides where it goes. Swap Loki for another store and no app changes.
 
 ## How we use it in this demo
 
-Alloy owns **all four signals** — logs, traces, profiles, *and* metrics +
-alerting rules. It runs as a **DaemonSet** — one pod per node — so it's always
+Alloy owns **all four signals** - logs, traces, profiles, *and* metrics +
+alerting rules. It runs as a **DaemonSet** - one pod per node - so it's always
 local to the workloads it collects from.
 
 | Signal | Alloy pipeline | Sends to |
@@ -49,7 +49,7 @@ local to the workloads it collects from.
 
 The `prometheus.operator.*` and `mimir.rules.kubernetes` components read the
 Prometheus-Operator CRDs (`ServiceMonitor`/`PodMonitor`/`PrometheusRule`)
-straight from the Kubernetes API with Alloy's own client — they don't need the
+straight from the Kubernetes API with Alloy's own client - they don't need the
 Operator's own reconcile loop, only the CRDs it installs (see
 [kube-prometheus-stack](./kube-prometheus-stack.md)). No extra RBAC is needed:
 the chart's default ClusterRole already grants the necessary
@@ -68,12 +68,12 @@ detail is in [architecture.md](../architecture.md#data-flow).
   light up.
 
 ![Alloy UI Graph view showing the traces, logs, and profiles pipelines wired component-by-component with live throughput numbers](../images/alloy-ui.png)
-*The Alloy Graph view — traces (`otelcol.receiver.otlp → batch → exporter.otlp "tempo"`), logs (`discovery → loki.source → loki.process → loki.write`), and profiles (`pyroscope.scrape → pyroscope.write`) as three live pipelines, annotated with per-second throughput.*
+*The Alloy Graph view - traces (`otelcol.receiver.otlp → batch → exporter.otlp "tempo"`), logs (`discovery → loki.source → loki.process → loki.write`), and profiles (`pyroscope.scrape → pyroscope.write`) as three live pipelines, annotated with per-second throughput.*
 
 ## Why it matters
 
 Without a collector, every app would need to know the address and protocol of
-every backend — brittle and hard to change. Alloy is the **seam** between "code
+every backend - brittle and hard to change. Alloy is the **seam** between "code
 that emits telemetry" and "systems that store it": apps stay simple, and you
 reconfigure collection and routing centrally, in one place, without redeploying
 anything.

@@ -1,4 +1,4 @@
-# Pyroscope (profiles) — monolithic single binary, minimal footprint.
+# Pyroscope (profiles) - monolithic single binary, minimal footprint.
 #
 # The chart runs the "all" target as a single StatefulSet by default; we just
 # keep it at one replica and disable the bundled Alloy subchart (we ship our

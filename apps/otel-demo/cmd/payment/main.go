@@ -39,7 +39,7 @@ func main() {
 	defaultFailRate := getfloat("FAIL_RATE", 0)
 
 	// A dedicated business counter for simulated declines, exported to
-	// Prometheus as demo_payment_failures_total — the signal the PrometheusRule
+	// Prometheus as demo_payment_failures_total - the signal the PrometheusRule
 	// alerts on. (otelhttp also records the 500s under
 	// http_server_request_duration_seconds_count{http_response_status_code="500"}.)
 	failures, err := otel.Meter("payment").Int64Counter("demo_payment_failures",
@@ -58,7 +58,7 @@ func main() {
 
 		// Simulated failure: record it on the span (error status + exception
 		// event), bump the metric, log at error level, and return 500. All three
-		// signals — trace, metric, log — light up for the same event.
+		// signals - trace, metric, log - light up for the same event.
 		if httpx.ShouldFail(r, defaultFailRate) {
 			span.RecordError(errCardDeclined)
 			span.SetStatus(codes.Error, errCardDeclined.Error())

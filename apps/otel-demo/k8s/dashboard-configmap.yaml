@@ -2,8 +2,8 @@
 # helm/grafana/values.yaml, searchNamespace: ALL) auto-loads any ConfigMap
 # labelled grafana_dashboard=1, so this needs no change to the Grafana release.
 #
-# Panels are grouped into rows — Health overview, Traffic, Errors, Latency, and
-# Runtime & resources — and driven by the metrics the app exposes on /metrics:
+# Panels are grouped into rows - Health overview, Traffic, Errors, Latency, and
+# Runtime & resources - and driven by the metrics the app exposes on /metrics:
 #   demo_orders_total / demo_order_errors_total (frontend), demo_payment_failures_total
 #   (payment), otelhttp RED histograms (http_server_request_duration_seconds_*),
 #   and the Go runtime / process collectors. Services are separated by the
@@ -19,7 +19,7 @@ metadata:
 data:
   otel-demo.json: |
     {
-      "title": "OTel Demo — App Health",
+      "title": "OTel Demo - App Health",
       "uid": "otel-demo-red",
       "tags": [
         "otel-demo",

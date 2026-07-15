@@ -1,4 +1,4 @@
-# Grafana Alloy — the collector for all four signals by default
+# Grafana Alloy - the collector for all four signals by default
 # (METRICS_MODE=alloy; see the Makefile).
 #
 # Runs as a DaemonSet.
@@ -13,12 +13,12 @@
 # Alloy needs no extra RBAC for this: the chart's default ClusterRole already
 # grants get/list/watch on servicemonitors/podmonitors/prometheusrules
 # (monitoring.coreos.com). Those CRDs are installed by kube-prometheus-stack's
-# Operator (still deployed for that reason — see
+# Operator (still deployed for that reason - see
 # helm/kube-prometheus-stack/values.yaml); Alloy reads them directly with its
 # own Kubernetes client, without needing the Operator's reconcile loop.
 #
 # Under METRICS_MODE=prometheus, kube-prometheus-stack's own Prometheus owns
-# metrics instead — see values-prometheus-metrics.yaml (a logs/traces/profiles-
+# metrics instead - see values-prometheus-metrics.yaml (a logs/traces/profiles-
 # only version of the config below) and docs/metrics-modes.md.
 
 controller:
@@ -32,7 +32,7 @@ serviceMonitor:
 # Expose only the Alloy UI to the host as a NodePort. The kind node maps
 # hostPort 12345 -> containerPort 30345 (see kind/cluster.yaml extraPortMappings),
 # so the UI is reachable at http://localhost:12345. The OTLP receiver ports stay
-# cluster-internal — demo apps push to them via the in-cluster Service DNS.
+# cluster-internal - demo apps push to them via the in-cluster Service DNS.
 service:
   type: NodePort
   nodePort: 30345   # UI / http-metrics (port 12345)

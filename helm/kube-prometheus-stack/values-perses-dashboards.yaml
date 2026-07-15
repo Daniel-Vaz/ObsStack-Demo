@@ -3,7 +3,7 @@
 #
 # values.yaml's default (`forceDeployDashboards: true`) makes KPS deploy its
 # bundled default dashboards as `grafana_dashboard: "1"` ConfigMaps even
-# though its own Grafana subchart stays disabled — helm/grafana's k8s-sidecar
+# though its own Grafana subchart stays disabled - helm/grafana's k8s-sidecar
 # is what actually consumes those. In Perses mode, helm/grafana isn't deployed
 # at all, so there's no sidecar to consume them and they'd just be dead
 # ConfigMaps sitting in the namespace. Perses gets its dashboards a different

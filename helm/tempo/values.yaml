@@ -1,4 +1,4 @@
-# Tempo (traces) — single-binary (monolithic) chart, filesystem storage.
+# Tempo (traces) - single-binary (monolithic) chart, filesystem storage.
 #
 # The grafana/tempo chart (as opposed to tempo-distributed) is already a
 # monolithic single-binary deployment. Alloy pushes OTLP here.
@@ -58,7 +58,7 @@ tempo:
     requests: { cpu: 100m, memory: 256Mi }
 
   # Which metrics-generator processors run. This chart reads the active
-  # processor list from `tempo.overrides.defaults` — a top-level
+  # processor list from `tempo.overrides.defaults` - a top-level
   # `global_overrides` key is silently ignored, which is why the generator
   # produced nothing before.
   overrides:

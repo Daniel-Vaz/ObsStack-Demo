@@ -3,13 +3,13 @@
 # Provisioning: Loki's chart runs a "rules sidecar" that watches for ConfigMaps
 # labelled `loki_rule` and syncs their files into the ruler's local store. That
 # sidecar runs in the *observability* namespace and, with namespaced RBAC, only
-# sees ConfigMaps there — so this object lives in `observability` (not
+# sees ConfigMaps there - so this object lives in `observability` (not
 # `otel-demo` like the rest of the app). It is still applied by `make demo`,
 # which runs `kubectl apply -f apps/otel-demo/k8s/` (namespace comes from the
 # manifest, not the flag).
 #
 # The `k8s-sidecar-target-directory` annotation steers the files into
-# `/rules/fake/` — auth is disabled cluster-wide so every tenant is "fake", and
+# `/rules/fake/` - auth is disabled cluster-wide so every tenant is "fake", and
 # the local ruler loads rules from `<store>/<tenant>/`.
 #
 # Fired alerts go to the same Alertmanager as the metric-based rules
@@ -80,4 +80,4 @@ data:
               summary: payment is logging declined charges
               description: >-
                 {{ printf "%.0f" $value }} "payment declined" log lines in the
-                last 5m — simulated faults are turned up in the demo.
+                last 5m - simulated faults are turned up in the demo.

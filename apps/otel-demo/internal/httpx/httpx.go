@@ -26,7 +26,7 @@ import (
 //	/healthz          liveness/readiness
 //
 // Keeping everything on one container port means Alloy's pod discovery resolves
-// exactly one Pyroscope scrape target — no extra collector config needed.
+// exactly one Pyroscope scrape target - no extra collector config needed.
 func NewMux() *http.ServeMux {
 	mux := http.NewServeMux()
 
@@ -67,7 +67,7 @@ func Client() *http.Client {
 // A non-2xx response is returned as an error so a simulated failure injected
 // deep in the call chain (see FailRate) propagates back up: each service sees
 // its downstream call fail, marks its own span as errored, logs, and returns
-// 5xx — producing a full distributed-error trace instead of a silent 500.
+// 5xx - producing a full distributed-error trace instead of a silent 500.
 func Get(ctx context.Context, client *http.Client, url string) (string, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {

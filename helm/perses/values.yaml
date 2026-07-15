@@ -1,15 +1,15 @@
-# Perses — deployed and managed by the Perses Operator
+# Perses - deployed and managed by the Perses Operator
 # (https://github.com/perses/perses-operator) via CRDs (see templates/).
-# Requires helm/perses-operator installed first (the CRDs' owner) — see the
+# Requires helm/perses-operator installed first (the CRDs' owner) - see the
 # Makefile's `perses-operator` -> `perses` ordering.
 #
 # No login by default (demo only, same posture as this repo's Grafana
 # admin/admin and Headlamp's unauthenticated cluster-admin). Reach the UI with
 # `make perses-ui`.
 
-# Pinned explicitly (matches the operator's own current default — see
+# Pinned explicitly (matches the operator's own current default - see
 # https://github.com/perses/perses-operator/blob/main/internal/operator/defaults.go
-# — but pinned here rather than trusted, per this repo's version-pinning
+# - but pinned here rather than trusted, per this repo's version-pinning
 # convention for every other component).
 image: docker.io/persesdev/perses:v0.53.1
 
@@ -19,7 +19,7 @@ resources:
   requests: { cpu: 100m, memory: 128Mi }
 
 # Exposed to the host as a NodePort via a hand-rolled Service (see
-# templates/perses.yaml) — the Perses CR's own spec.service only supports
+# templates/perses.yaml) - the Perses CR's own spec.service only supports
 # name/annotations, not type/nodePort, and the Operator's generated Service is
 # hardcoded ClusterIP and actively reverts any manual patch to it on every
 # reconcile. The kind node maps hostPort 8082 -> containerPort 30082 (see
@@ -29,7 +29,7 @@ service:
   nodePort: 30082
 
 # Provisioned global datasources for all four signals (see
-# templates/datasources.yaml — one PersesGlobalDatasource CR per entry).
+# templates/datasources.yaml - one PersesGlobalDatasource CR per entry).
 # `name: prometheus-datasource` is load-bearing, not cosmetic: every vendored
 # community-mixins dashboard's PrometheusTimeSeriesQuery hardcodes
 # `datasource: {kind: PrometheusDatasource, name: prometheus-datasource}`, so

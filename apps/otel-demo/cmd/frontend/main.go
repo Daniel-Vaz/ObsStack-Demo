@@ -55,7 +55,7 @@ func main() {
 
 	// Web UI: a small interactive page for generating traffic by hand, so the
 	// stack has live telemetry even when the loadgen is not deployed. Served
-	// unwrapped (no server span) — page loads aren't part of the order flow.
+	// unwrapped (no server span) - page loads aren't part of the order flow.
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {
 			http.NotFound(w, r)

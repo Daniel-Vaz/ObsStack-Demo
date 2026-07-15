@@ -2,7 +2,7 @@
 
 A minimal, reproducible demo of the full Grafana observability stack running on a
 local [kind](https://kind.sigs.k8s.io/) cluster. A single **Grafana Alloy**
-collector gathers **all four signals** — metrics, logs, traces, and profiles —
+collector gathers **all four signals** - metrics, logs, traces, and profiles -
 and ships them to the storage backends: **Mimir** (metrics), **Loki** (logs),
 **Tempo** (traces), and **Pyroscope** (profiles). Everything is read back through
 **Grafana** (the **L**oki / **G**rafana / **T**empo / **M**imir stack, plus
@@ -20,7 +20,7 @@ at `http://localhost:3000`, Headlamp at `http://localhost:4466`).
 
 >[!NOTE]
 >![Grafana Kubernetes / Compute Resources / Cluster dashboard showing CPU and memory utilisation panels by namespace](docs/images/grafana-dashboard-example.png)
->*Grafana at `http://localhost:3000`, rendering a stock Kubernetes dashboard from metrics scraped by Alloy and stored in Mimir — one of the many views this stack lights up.*
+>*Grafana at `http://localhost:3000`, rendering a stock Kubernetes dashboard from metrics scraped by Alloy and stored in Mimir - one of the many views this stack lights up.*
 
 ```mermaid
 flowchart TB
@@ -55,7 +55,7 @@ This setup uses **Podman** as the container runtime. The Makefile exports
 
 Grafana's AI assistant talks to an Azure AI Foundry endpoint by default, so set
 `AZURE_LLM_API_KEY` in `.env` (gitignored) before `make up` if you want it
-working — see [AI assistant, in Grafana](#what-gets-deployed) below.
+working - see [AI assistant, in Grafana](#what-gets-deployed) below.
 
 ## Quick start
 
@@ -75,24 +75,24 @@ locally controlled values files under [`helm/`](helm/).
 | Component | Chart | Version | Role | Storage |
 |-----------|-------|---------|------|---------|
 | kube-prometheus-stack | `prometheus-community/kube-prometheus-stack` | 87.5.1 | Prometheus Operator + kube-state-metrics + node-exporter + Alertmanager (Grafana & Windows exporter disabled) | ephemeral |
-| metrics-server | `metrics-server/metrics-server` | 3.13.1 | kubelet resource metrics (`kubectl top`/HPA), scraped via its built-in ServiceMonitor | — |
+| metrics-server | `metrics-server/metrics-server` | 3.13.1 | kubelet resource metrics (`kubectl top`/HPA), scraped via its built-in ServiceMonitor | - |
 | Mimir     | `grafana/mimir-distributed` | 6.1.0 | metrics storage; ruler evaluates alerting rules | bundled MinIO |
 | Loki      | `grafana/loki`   | 7.0.0  | logs storage (SingleBinary) | filesystem |
 | Tempo     | `grafana-community/tempo`  | 2.2.3 | traces storage (single binary) | filesystem |
 | Pyroscope | `grafana/pyroscope` | 2.1.0 | profiles storage (monolithic `all` target) | filesystem |
-| Grafana Operator | `grafana/grafana-operator` | 5.24.0 | reconciles `helm/grafana`'s CRDs into a running Grafana | — |
+| Grafana Operator | `grafana/grafana-operator` | 5.24.0 | reconciles `helm/grafana`'s CRDs into a running Grafana | - |
 | Grafana   | `helm/grafana` (first-party CRs: `Grafana`, `GrafanaDatasource`) | operator-managed | provisioned datasources + Kubernetes dashboards; installs the `grafana-llm-app` + Graft AI plugins (backed by Azure AI Foundry) | ephemeral |
-| Alloy     | `grafana/alloy`  | 1.10.0 | DaemonSet collector for metrics, logs, traces, profiles, and alerting rules | — |
-| Headlamp  | `headlamp/headlamp` | 0.43.0 | in-cluster dashboard (cluster-admin, no-login demo mode) | — |
+| Alloy     | `grafana/alloy`  | 1.10.0 | DaemonSet collector for metrics, logs, traces, profiles, and alerting rules | - |
+| Headlamp  | `headlamp/headlamp` | 0.43.0 | in-cluster dashboard (cluster-admin, no-login demo mode) | - |
 
 >[!NOTE]
 >Grafana Operator + Grafana are deployed only in the default
 >`DASHBOARD_BACKEND=grafana` mode. An opt-in `DASHBOARD_BACKEND=perses` mode
->swaps them for the Perses Operator + Perses instead (no LLM/Graft/Ollama) —
+>swaps them for the Perses Operator + Perses instead (no LLM/Graft/Ollama) -
 >see [docs/dashboard-backends.md](docs/dashboard-backends.md).
 
 Alongside the stack, `make up` also builds and deploys the **OpenTelemetry demo
-app** (`otel-demo-app`) into its own `otel-demo` namespace — via plain
+app** (`otel-demo-app`) into its own `otel-demo` namespace - via plain
 Kubernetes manifests rather than Helm. See [Demo application](#demo-application)
 below.
 
@@ -100,13 +100,13 @@ below.
 assistant. The Grafana chart installs two plugins
 ([`helm/grafana/values.yaml`](helm/grafana/values.yaml)): the official
 `grafana-llm-app` (pointed at an **Azure AI Foundry** endpoint via its
-OpenAI-compatible API — set `AZURE_LLM_API_KEY` in `.env`) and
+OpenAI-compatible API - set `AZURE_LLM_API_KEY` in `.env`) and
 [**Graft**](https://github.com/vikshana/vikshana-graft-app), a community "AI
 Assistant for Grafana" app that layers a natural-language chat UI on top of
 it, using Grafana's built-in MCP tools to query your dashboards, metrics,
 logs, traces, and alerts. Find **Graft** in the Grafana nav at
 `http://localhost:3000`. An opt-in mode swaps in a local, key-less
-[Ollama](docs/solutions/ollama.md) backend instead — see
+[Ollama](docs/solutions/ollama.md) backend instead - see
 [docs/llm-backends.md](docs/llm-backends.md). See
 [Learn the tools](#learn-the-tools) below for the full guides.
 
@@ -130,7 +130,7 @@ The node ports in [`helm/grafana/values.yaml`](helm/grafana/values.yaml),
 must match the `extraPortMappings` in [`kind/cluster.yaml`](kind/cluster.yaml).
 Because those mappings are applied at cluster-creation time, **changing them
 requires `make down && make up`**. Alloy's OTLP receiver ports (4317/4318) stay
-cluster-internal — demo apps push to them via the in-cluster Service DNS.
+cluster-internal - demo apps push to them via the in-cluster Service DNS.
 
 ## Layout
 
@@ -156,36 +156,36 @@ cluster-internal — demo apps push to them via the in-cluster Service DNS.
 ## Learn the tools
 
 New to the Grafana observability stack? [`docs/solutions/`](docs/solutions/) has a
-short, beginner-friendly guide to each tool in this demo — what it is, what it's
+short, beginner-friendly guide to each tool in this demo - what it is, what it's
 for, and how it's wired in here:
 
-- [Kube-Prometheus-Stack](docs/solutions/kube-prometheus-stack.md) — operator, exporters, Alertmanager
-- [Mimir](docs/solutions/mimir.md) — long-term metrics storage + rule evaluation (ruler)
-- [Loki](docs/solutions/loki.md) — logs storage
-- [Tempo](docs/solutions/tempo.md) — traces storage
-- [Pyroscope](docs/solutions/pyroscope.md) — continuous profiling
-- [Alloy](docs/solutions/alloy.md) — the collection pipeline (all four signals)
-- [Headlamp](docs/solutions/headlamp.md) — cluster UI
-- [Kind & Podman](docs/solutions/kind-and-podman.md) — the local platform
-- [Perses](docs/solutions/perses.md) — opt-in Grafana alternative
+- [Kube-Prometheus-Stack](docs/solutions/kube-prometheus-stack.md) - operator, exporters, Alertmanager
+- [Mimir](docs/solutions/mimir.md) - long-term metrics storage + rule evaluation (ruler)
+- [Loki](docs/solutions/loki.md) - logs storage
+- [Tempo](docs/solutions/tempo.md) - traces storage
+- [Pyroscope](docs/solutions/pyroscope.md) - continuous profiling
+- [Alloy](docs/solutions/alloy.md) - the collection pipeline (all four signals)
+- [Headlamp](docs/solutions/headlamp.md) - cluster UI
+- [Kind & Podman](docs/solutions/kind-and-podman.md) - the local platform
+- [Perses](docs/solutions/perses.md) - opt-in Grafana alternative
 
 ## Demo application
 
 An OpenTelemetry-instrumented demo app ships in
-[`apps/otel-demo/`](apps/otel-demo/). It's a small Go microservices app —
-`frontend → {checkout → payment, catalog}` — that generates **all four
+[`apps/otel-demo/`](apps/otel-demo/). It's a small Go microservices app -
+`frontend → {checkout → payment, catalog}` - that generates **all four
 signals** and feeds them into **this stack's own collectors** (no bundled
 collector/backends, unlike the upstream OpenTelemetry demo). It runs in its own
 **`otel-demo`** namespace and requires **no changes to the stack**.
 
 The **frontend serves an interactive web UI at `http://localhost:8080`** where
-you place orders and drive load by hand — that's the default. A **`loadgen`** is
+you place orders and drive load by hand - that's the default. A **`loadgen`** is
 included as an *optional* background traffic driver, **off by default**; deploy it
 with `DEMO_LOADGEN=true`.
 
 >[!NOTE]
->![otel-demo traffic console at localhost:8080 — Place order / Browse catalog / Send burst controls, a live request counter, and a response log](docs/images/oteldemoapp-ui.png)
->*The demo app's traffic console — place orders or flip on *Auto load* to generate the traces, metrics, logs, and profiles you then explore in Grafana.*
+>![otel-demo traffic console at localhost:8080 - Place order / Browse catalog / Send burst controls, a live request counter, and a response log](docs/images/oteldemoapp-ui.png)
+>*The demo app's traffic console - place orders or flip on *Auto load* to generate the traces, metrics, logs, and profiles you then explore in Grafana.*
 
 | Signal   | App emits | Stack collects |
 |----------|-----------|----------------|
@@ -225,15 +225,15 @@ walkthrough.
 ## Advanced
 
 The demo collects metrics with Alloy by default. For an alternate
-metrics-collection mode intended for specific testing scenarios — running
-kube-prometheus-stack's own Prometheus server in the loop — see
+metrics-collection mode intended for specific testing scenarios - running
+kube-prometheus-stack's own Prometheus server in the loop - see
 [docs/metrics-modes.md](docs/metrics-modes.md).
 
 Grafana's AI assistant talks to Azure AI Foundry by default. For an alternate,
-key-less model backend intended for specific testing scenarios — running
-Ollama in-cluster instead — see [docs/llm-backends.md](docs/llm-backends.md).
+key-less model backend intended for specific testing scenarios - running
+Ollama in-cluster instead - see [docs/llm-backends.md](docs/llm-backends.md).
 
 The demo visualizes everything through Grafana by default. For an alternate
-dashboard backend intended for specific testing scenarios — running
-[Perses](docs/solutions/perses.md) instead — see
+dashboard backend intended for specific testing scenarios - running
+[Perses](docs/solutions/perses.md) instead - see
 [docs/dashboard-backends.md](docs/dashboard-backends.md).

@@ -1,6 +1,6 @@
 # Kube-Prometheus-Stack
 
-**In one line:** the batteries-included way to run Prometheus on Kubernetes —
+**In one line:** the batteries-included way to run Prometheus on Kubernetes -
 it bundles Prometheus, the alerting stack, and the exporters that turn a raw
 cluster into a metrics-rich one.
 
@@ -10,7 +10,7 @@ cluster into a metrics-rich one.
 
 ## What it is
 
-**Prometheus** is the de-facto standard for **metrics** — numeric measurements
+**Prometheus** is the de-facto standard for **metrics** - numeric measurements
 sampled over time (request rate, memory usage, queue depth). It works by
 **pulling** ("scraping") a `/metrics` HTTP endpoint from each target on a
 schedule and storing the samples in a time-series database you query with
@@ -27,7 +27,7 @@ Installing KPS gives you several cooperating pieces:
 | Component | What it does |
 |-----------|--------------|
 | **Prometheus** | Scrapes targets, stores time-series, answers PromQL queries. |
-| **Prometheus Operator** | The "brain." Watches Kubernetes for `ServiceMonitor` / `PodMonitor` / `PrometheusRule` custom resources and reconfigures Prometheus automatically — no editing config files by hand. |
+| **Prometheus Operator** | The "brain." Watches Kubernetes for `ServiceMonitor` / `PodMonitor` / `PrometheusRule` custom resources and reconfigures Prometheus automatically - no editing config files by hand. |
 | **kube-state-metrics** | Exposes the *state* of Kubernetes objects as metrics (how many pods are Ready, deployment replica counts, restart counts). |
 | **node-exporter** | Runs on every node and exposes *host-level* metrics (CPU, memory, disk, network). |
 | **Alertmanager** | Receives alerts fired by Prometheus rules, then dedupes, groups, silences, and routes them to email/Slack/PagerDuty/etc. |
@@ -41,13 +41,13 @@ adding a new scrape target is declarative.
 ## How we use it in this demo
 
 In this demo KPS deploys the Prometheus **Operator**, kube-state-metrics,
-node-exporter, and **Alertmanager** — **not a Prometheus server**. The Operator's
+node-exporter, and **Alertmanager** - **not a Prometheus server**. The Operator's
 job is to own the CRDs (`ServiceMonitor`/`PodMonitor`/`PrometheusRule`);
 [Alloy](./alloy.md) reads them directly and does the scraping and rule-syncing.
 Alertmanager is where alerts land, fired by [Mimir](./mimir.md)'s ruler.
 
 - **The exporters light up the standard dashboards.** kube-state-metrics exposes
-  the *state* of Kubernetes objects, and node-exporter exposes host metrics —
+  the *state* of Kubernetes objects, and node-exporter exposes host metrics -
   both scraped by Alloy and remote-written to Mimir, powering the stock
   Kubernetes dashboards in Grafana out of the box.
 - **Alertmanager routes every alert** through a single catch-all receiver, so
@@ -60,13 +60,13 @@ See [architecture.md](../architecture.md#metrics-collection--alerting) for the
 exact values and rationale.
 
 > Prometheus's own server can be brought into the loop instead of Alloy for
-> specific testing scenarios — see [metrics-modes.md](../metrics-modes.md).
+> specific testing scenarios - see [metrics-modes.md](../metrics-modes.md).
 
 ## Try it
 
 - Open Alertmanager at `http://localhost:9093` to see the alert-routing UI.
 - In Grafana, **Explore → Mimir** queries the metrics Alloy scrapes and
-  remote-writes — try `up` (1 = target healthy) or
+  remote-writes - try `up` (1 = target healthy) or
   `rate(http_server_request_duration_seconds_count[1m])`.
 
 Once metrics land in Mimir, Grafana renders them into dashboards. The bundled
@@ -78,7 +78,7 @@ out of the box:
 
 ## Why it matters
 
-Metrics are the cheapest, highest-level signal — perfect for dashboards and
+Metrics are the cheapest, highest-level signal - perfect for dashboards and
 alerting ("is anything on fire?"). KPS turns a bare cluster into one that
 answers that question out of the box, and its operator pattern means you extend
 monitoring by adding small YAML objects, never by editing a monolithic config.

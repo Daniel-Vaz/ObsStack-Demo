@@ -4,7 +4,7 @@ metadata:
   name: {{ include "perses.fullname" . }}
   # instanceSelector on PersesGlobalDatasource/PersesDashboard (and on the
   # Perses List call the operator's datasource/dashboard controllers make)
-  # matches against this top-level metadata.labels — a *different* mechanism
+  # matches against this top-level metadata.labels - a *different* mechanism
   # from spec.metadata.labels below, which the operator instead propagates
   # onto the Deployment/pods/Service it generates for this instance. Both are
   # needed: this one for CRs to find "their" instance, spec.metadata.labels
@@ -19,7 +19,7 @@ spec:
     labels:
       {{- include "perses.instanceSelectorLabels" . | nindent 6 }}
   config:
-    # File-based storage, ephemeral (no PVC) — same "no persistence, dashboards
+    # File-based storage, ephemeral (no PVC) - same "no persistence, dashboards
     # provisioned as code" posture this repo already documents for Grafana.
     # Dashboards/datasources arrive as CRs (templates/dashboards/,
     # templates/datasources.yaml), so nothing here needs to survive a restart.
@@ -31,11 +31,11 @@ spec:
     {{- toYaml .Values.resources | nindent 4 }}
 ---
 # The Operator's own generated Service (named after the Perses CR above) is
-# hardcoded ClusterIP — the CRD's spec.service only exposes name/annotations,
+# hardcoded ClusterIP - the CRD's spec.service only exposes name/annotations,
 # not type/nodePort, and the reconciler actively reverts any manual patch to
 # Spec.Type/Spec.Ports on every reconcile (controllers/perses/service_controller.go's
 # serviceNeedsUpdate). So expose the UI with a second, separate Service here
-# instead of trying to patch the Operator's — the Perses-side analogue of the
+# instead of trying to patch the Operator's - the Perses-side analogue of the
 # Grafana Operator Service quirk documented in docs/architecture.md.
 #
 # Selector: the Operator merges spec.metadata.labels (set above) onto every

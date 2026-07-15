@@ -1,7 +1,7 @@
 # Loki
 
 **In one line:** log aggregation that's cheap because it indexes **labels, not
-the log text** — "like Prometheus, but for logs."
+the log text** - "like Prometheus, but for logs."
 
 > Chart: `grafana/loki` (v7.0.0, SingleBinary mode) ·
 > config: [`helm/loki/values.yaml`](../../helm/loki/values.yaml) ·
@@ -29,7 +29,7 @@ a log-flavored cousin of PromQL.
 - **LogQL.** Filter (`|= "error"`), parse (`| json`), and even derive metrics
   from logs (`count_over_time(...)`).
 - **Ruler.** Loki can evaluate LogQL alerting rules on a schedule and fire the
-  results into Alertmanager — "alert when the error-log rate crosses a
+  results into Alertmanager - "alert when the error-log rate crosses a
   threshold," the log-native counterpart to a Prometheus alert.
 
 ## How we use it in this demo
@@ -38,18 +38,18 @@ Loki is the **store for logs.** Applications and pods just write to **stdout**;
 [Alloy](./alloy.md) tails those logs and pushes them to Loki. Nothing in the app
 talks to Loki directly.
 
-- Runs in **SingleBinary (monolithic) mode** with **filesystem** storage — the
+- Runs in **SingleBinary (monolithic) mode** with **filesystem** storage - the
   whole thing is one pod, ideal for a laptop cluster.
 - Grafana's Loki datasource has a **derived field** on `trace_id`, so a log line
   from the demo app becomes a **clickable link to its trace** in
-  [Tempo](./tempo.md) — that's log↔trace correlation in action.
+  [Tempo](./tempo.md) - that's log↔trace correlation in action.
 - The **ruler is enabled** (`helm/loki/values.yaml` → `rulerConfig`) and fires
   into the same Alertmanager kube-prometheus-stack runs. The chart's rules
   sidecar syncs any ConfigMap labelled `loki_rule` into the ruler; the demo ships
   a set of LogQL alerts in
   [`apps/otel-demo/k8s/loki-rules.yaml`](../../apps/otel-demo/k8s/loki-rules.yaml)
   (e.g. "alert when the otel-demo error-log rate is high"). Turn up *simulated
-  errors* in the demo UI to watch them fire — they show up in **Grafana
+  errors* in the demo UI to watch them fire - they show up in **Grafana
   Alerting** next to the metric-based alerts from Mimir's ruler.
 
 ## Try it
@@ -59,14 +59,14 @@ talks to Loki directly.
 - Filter with LogQL: `{namespace="otel-demo"} |= "order placed"`.
 - Click the `trace_id` on any line to jump straight to the matching trace.
 
-![Grafana Logs Drilldown grouping log volume by service label — mimir, pyroscope, grafana, kube-apiserver, headlamp](../images/grafana-drilldown-logs.png)
-*Logs Drilldown over the Loki datasource — every service's log stream, grouped by label with a volume sparkline, ready to drill into.*
+![Grafana Logs Drilldown grouping log volume by service label - mimir, pyroscope, grafana, kube-apiserver, headlamp](../images/grafana-drilldown-logs.png)
+*Logs Drilldown over the Loki datasource - every service's log stream, grouped by label with a volume sparkline, ready to drill into.*
 
 ## Why it matters
 
 Logs are the ground truth of "what did the code actually say happened." Loki lets
-you keep all of them affordably, and — because it shares Prometheus's label model
-and links out to traces — it slots naturally beside your metrics and traces
+you keep all of them affordably, and - because it shares Prometheus's label model
+and links out to traces - it slots naturally beside your metrics and traces
 instead of living in a separate, expensive silo.
 
 ## Learn more

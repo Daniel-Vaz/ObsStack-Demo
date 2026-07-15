@@ -1,4 +1,4 @@
-# Headlamp — a web UI for browsing and managing the kind cluster.
+# Headlamp - a web UI for browsing and managing the kind cluster.
 #
 # A lightweight Kubernetes dashboard (https://github.com/kubernetes-sigs/headlamp)
 # for eyeballing the demo: pods, deployments, logs, events across the
@@ -10,7 +10,7 @@ config:
   # In-cluster mode: Headlamp talks to the API server via its own ServiceAccount.
   inCluster: true
 
-  # DEMO ONLY — authenticate every visitor as the pod's ServiceAccount so the UI
+  # DEMO ONLY - authenticate every visitor as the pod's ServiceAccount so the UI
   # opens straight to the cluster with no token prompt. Combined with the
   # cluster-admin binding below this makes it read/write cluster-admin, which is
   # fine for a throwaway local kind cluster but must never be used on a real one

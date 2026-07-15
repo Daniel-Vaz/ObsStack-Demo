@@ -5,7 +5,7 @@ Fetches every PersesDashboard from a pinned commit of
 https://github.com/perses/community-mixins (examples/dashboards/operator/**)
 and rewrites each from the upstream v1alpha1 shape (dashboard body directly
 under `spec:`) to v1alpha2 (body nested under `spec.config:`, plus an
-`instanceSelector`) — see docs/architecture.md for why the rewrite is needed
+`instanceSelector`) - see docs/architecture.md for why the rewrite is needed
 (the operator's CRD conversion webhook is intentionally disabled in this repo,
 so v1alpha1 objects are never auto-converted).
 
@@ -21,10 +21,10 @@ import urllib.request
 import yaml
 
 # YAML 1.1 (what Kubernetes' YAML parser speaks) resolves these bare words as
-# bool/null rather than string — e.g. the dashboards' grid-layout `y:` keys.
+# bool/null rather than string - e.g. the dashboards' grid-layout `y:` keys.
 # PyYAML's default dumper only quotes a string if *it* would misresolve it
 # under its own (also YAML-1.1) rules, so this should already cover `y`/`n`
-# grid keys — but force it explicitly so the vendored output never depends on
+# grid keys - but force it explicitly so the vendored output never depends on
 # that resolver behaving the same as the consumer's.
 _AMBIGUOUS_SCALARS = {
     "y", "Y", "yes", "Yes", "YES", "n", "N", "no", "No", "NO",
@@ -102,7 +102,7 @@ NAMESPACE_PLACEHOLDER = "__RELEASE_NAMESPACE__"
 
 # Dashboard content legitimately contains its own `{{label}}` templating
 # (Perses/Grafana-style seriesNameFormat/legend placeholders, e.g.
-# `{{instance}}`) — Helm's Go template engine would otherwise try to parse
+# `{{instance}}`) - Helm's Go template engine would otherwise try to parse
 # those as its own actions (and fail: e.g. `{{namespace}}` looks like a call
 # to an undefined "namespace" function). Escape every such brace pair to a
 # literal-printing action *before* injecting our own real `{{ .Release.* }}`
@@ -148,7 +148,7 @@ def main():
             header = (
                 f"# Vendored from perses/community-mixins @ {MIXINS_COMMIT}\n"
                 f"# https://github.com/perses/community-mixins/blob/{MIXINS_COMMIT}/examples/dashboards/operator/{mixin}/{fname}\n"
-                f"# Rewritten from v1alpha1 to v1alpha2 by scripts/vendor-perses-dashboards.py — do not hand-edit.\n"
+                f"# Rewritten from v1alpha1 to v1alpha2 by scripts/vendor-perses-dashboards.py - do not hand-edit.\n"
             )
             (mixin_dir / fname).write_text(header + out)
     print(f"done: wrote dashboards under {OUT_DIR}")

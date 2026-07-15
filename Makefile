@@ -22,10 +22,10 @@ HELM_TIMEOUT ?= 10m
 #            the Prometheus-Operator CRDs and remote-writes to Mimir; Alloy also
 #            syncs PrometheusRules into Mimir's ruler, which evaluates them and
 #            fires to the (KPS-deployed) Alertmanager. KPS itself deploys only
-#            kube-state-metrics, node-exporter, the Operator, and Alertmanager —
+#            kube-state-metrics, node-exporter, the Operator, and Alertmanager -
 #            no Prometheus server. Karma is not deployed: Grafana Alerting (via
 #            the Mimir datasource) covers that role instead.
-# prometheus: an opt-in mode for specific testing scenarios — KPS's own
+# prometheus: an opt-in mode for specific testing scenarios - KPS's own
 #            Prometheus scrapes and evaluates rules, firing to its Alertmanager,
 #            and Karma is deployed as Alertmanager's dashboard. See
 #            docs/metrics-modes.md.
@@ -58,7 +58,7 @@ GRAFANA_EXTRA_VALUES := $(if $(filter prometheus,$(METRICS_MODE)),--values $(HEL
 # Toggle with: make up DASHBOARD_BACKEND=perses
 #
 # Unlike METRICS_MODE/LLM_BACKEND, which are values-overlays on the *same*
-# Helm release, Grafana and Perses are two entirely separate releases — so
+# Helm release, Grafana and Perses are two entirely separate releases - so
 # switching DASHBOARD_BACKEND on a cluster that's already up needs `make
 # clean` first (or a fresh `make down && make up`), or you end up with both
 # stacks installed side by side.
@@ -67,7 +67,7 @@ ifeq ($(filter $(DASHBOARD_BACKEND),grafana perses),)
 $(error DASHBOARD_BACKEND must be 'grafana' or 'perses', got '$(DASHBOARD_BACKEND)')
 endif
 
-# Layered alongside KPS_EXTRA_VALUES above — both overlays can apply at once
+# Layered alongside KPS_EXTRA_VALUES above - both overlays can apply at once
 # (e.g. METRICS_MODE=prometheus DASHBOARD_BACKEND=perses is valid).
 KPS_PERSES_VALUES := $(if $(filter perses,$(DASHBOARD_BACKEND)),--values $(HELM_DIR)/kube-prometheus-stack/values-perses-dashboards.yaml,)
 
@@ -77,7 +77,7 @@ DASHBOARD_BACKEND_TARGETS := $(if $(filter perses,$(DASHBOARD_BACKEND)),perses-o
 # ---- AI assistant LLM backend -------------------------------------------------
 # azure  (default): Grafana's LLM plugin (and the Graft assistant built on it)
 #        talk to an Azure AI Foundry endpoint. Needs AZURE_LLM_API_KEY set in
-#        .env (gitignored) — see helm/grafana/values.yaml.
+#        .env (gitignored) - see helm/grafana/values.yaml.
 # ollama: an opt-in mode that instead deploys Ollama in-cluster as a local,
 #         key-less model backend. See docs/llm-backends.md.
 # Toggle with: make up LLM_BACKEND=ollama
@@ -93,14 +93,14 @@ endif
 # helm/grafana/values.yaml over to this stack's in-cluster Ollama.
 LLM_EXTRA_VALUES := $(if $(filter ollama,$(LLM_BACKEND)),--values $(HELM_DIR)/grafana/values-ollama-llm.yaml,)
 
-# Ollama is only ever relevant in Grafana mode — Perses has no LLM/AI-assistant
+# Ollama is only ever relevant in Grafana mode - Perses has no LLM/AI-assistant
 # plugin in this demo, so `up` (below) skips deploying it there even if
 # LLM_BACKEND=ollama is also set.
 OLLAMA_TARGET := $(if $(filter ollama,$(LLM_BACKEND)),$(if $(filter grafana,$(DASHBOARD_BACKEND)),ollama,),)
 
 # ---- Demo application (apps/otel-demo) ----------------------------------------
 # An OTel-instrumented Go microservices app that feeds the stack's own
-# collectors (Alloy for traces/logs/profiles, and — depending on METRICS_MODE —
+# collectors (Alloy for traces/logs/profiles, and - depending on METRICS_MODE -
 # either Alloy or Prometheus for metrics). It lives in its own namespace and is
 # built into local images loaded straight into kind.
 DEMO_NAMESPACE ?= otel-demo
@@ -120,7 +120,7 @@ export KIND_EXPERIMENTAL_PROVIDER := podman
 # Pinned chart versions (see README for how these were chosen).
 # Tempo ships from the grafana-community repo; Grafana is a first-party chart
 # (helm/grafana) driven by the Grafana Operator (grafana/grafana-operator, from
-# the grafana repo) via CRDs — see docs/architecture.md.
+# the grafana repo) via CRDs - see docs/architecture.md.
 MIMIR_VERSION          := 6.1.0
 LOKI_VERSION           := 7.0.0
 TEMPO_VERSION          := 2.2.3
@@ -135,7 +135,7 @@ METRICS_SERVER_VERSION := 3.13.1
 
 # ollama's postStart hook pulls the llama3.2:3b model (~2GB) on first start, and
 # Kubernetes doesn't mark the container "Running" (so readiness, and thus
-# `helm --wait`) until that hook completes — give it much more room than the
+# `helm --wait`) until that hook completes - give it much more room than the
 # default HELM_TIMEOUT.
 OLLAMA_TIMEOUT ?= 20m
 
@@ -157,7 +157,7 @@ define helm_install
 		if [ $$attempt -eq 3 ]; then \
 			echo ">> $(1): still not ready after $$attempt attempts" >&2; exit 1; \
 		fi; \
-		echo ">> $(1): transient failure, pods still converging — retrying in 15s..."; \
+		echo ">> $(1): transient failure, pods still converging - retrying in 15s..."; \
 		sleep 15; \
 	done
 endef
@@ -165,7 +165,7 @@ endef
 # ---- Help --------------------------------------------------------------------
 .PHONY: help
 help: ## Show this help
-	@echo "Grafana LGTM demo — available targets:"
+	@echo "Grafana LGTM demo - available targets:"
 	@echo
 	@grep -E '^[a-zA-Z0-9_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
 		| sort \
@@ -231,7 +231,7 @@ grafana-operator: repos namespace ## Deploy the Grafana Operator (reconciles hel
 
 grafana: namespace grafana-operator ## Deploy Grafana (Operator-managed via CRDs; provisioned datasources) from its local chart
 	@# First-party local chart (helm/grafana) of CRDs (Grafana, GrafanaDatasource,
-	@# ...) — no external repo, so it skips `repos` and
+	@# ...) - no external repo, so it skips `repos` and
 	@# passes a chart path instead of a repo/chart ref. Same retry loop as
 	@# helm_install, minus the --version flag (invalid for local paths).
 	@for attempt in 1 2 3; do \
@@ -249,7 +249,7 @@ grafana: namespace grafana-operator ## Deploy Grafana (Operator-managed via CRDs
 		sleep 15; \
 	done
 	@# helm --wait only tracks the ConfigMap/RBAC/ServiceMonitor objects this
-	@# chart applies directly — it has no notion of the Grafana CR's own
+	@# chart applies directly - it has no notion of the Grafana CR's own
 	@# readiness. The actual Grafana Deployment ("grafana-deployment") is
 	@# created asynchronously by the Operator's reconcile loop, so wait for it
 	@# here explicitly: first for it to exist, then for it to roll out.
@@ -260,7 +260,7 @@ grafana: namespace grafana-operator ## Deploy Grafana (Operator-managed via CRDs
 		sleep 2; \
 	done
 	@kubectl wait --for=condition=Available deployment/grafana-deployment -n $(NAMESPACE) --timeout=$(HELM_TIMEOUT)
-	@# The Grafana pod being Available only means it's serving HTTP — the
+	@# The Grafana pod being Available only means it's serving HTTP - the
 	@# Operator still has to separately call Grafana's own API to actually
 	@# create the datasources (GrafanaDatasource CRs, reconciled async, same as
 	@# the Deployment above). Wait for those too, or `make validate` can race
@@ -275,7 +275,7 @@ perses-operator: repos namespace ## Deploy the Perses Operator (reconciles helm/
 
 perses: namespace perses-operator ## Deploy Perses (Operator-managed via CRDs; provisioned datasources + community-mixins dashboards) [DASHBOARD_BACKEND=perses]
 	@# First-party local chart (helm/perses) of CRDs (Perses, PersesGlobalDatasource,
-	@# PersesDashboard, ...) — no external repo, so it skips `repos` and passes a
+	@# PersesDashboard, ...) - no external repo, so it skips `repos` and passes a
 	@# chart path instead of a repo/chart ref. Same retry loop as helm_install,
 	@# minus the --version flag (invalid for local paths).
 	@for attempt in 1 2 3; do \
@@ -291,7 +291,7 @@ perses: namespace perses-operator ## Deploy Perses (Operator-managed via CRDs; p
 		sleep 15; \
 	done
 	@# helm --wait only tracks the objects this chart applies directly (the
-	@# NodePort Service, ServiceMonitor) — it has no notion of the Perses CR's
+	@# NodePort Service, ServiceMonitor) - it has no notion of the Perses CR's
 	@# own readiness. Unlike the Grafana CR, the Perses CR does expose an
 	@# "Available" status condition directly, so wait on that rather than
 	@# polling for a generated Deployment to exist first.
@@ -305,7 +305,7 @@ headlamp: repos namespace ## Deploy Headlamp (cluster web UI)
 	$(call helm_install,headlamp,headlamp/headlamp,$(HEADLAMP_VERSION))
 
 karma: namespace ## Deploy Karma (Alertmanager alert dashboard) from its local chart
-	@# First-party local chart (helm/karma) — no external repo, so it skips
+	@# First-party local chart (helm/karma) - no external repo, so it skips
 	@# `repos` and passes a chart path instead of a repo/chart ref. Same retry
 	@# loop as helm_install, minus the --version flag (invalid for local paths).
 	@for attempt in 1 2 3; do \
@@ -331,20 +331,20 @@ backends: mimir loki tempo pyroscope ## Deploy the four LGTM backends
 # (ServiceMonitor, PodMonitor, PrometheusRule, ...) that every other chart's
 # values (and Alloy, in METRICS_MODE=alloy) now reference, plus the
 # Alertmanager that Karma / Mimir's ruler fires to.
-# Karma is only deployed in the METRICS_MODE=prometheus mode — in the default
+# Karma is only deployed in the METRICS_MODE=prometheus mode - in the default
 # alloy mode, Grafana Alerting (via the Mimir datasource) covers that role.
 # The dashboard layer is Grafana+Operator by default, or Perses+Operator in
-# DASHBOARD_BACKEND=perses — see DASHBOARD_BACKEND_TARGETS above.
+# DASHBOARD_BACKEND=perses - see DASHBOARD_BACKEND_TARGETS above.
 stack: kube-prometheus-stack metrics-server backends $(DASHBOARD_BACKEND_TARGETS) headlamp $(if $(filter prometheus,$(METRICS_MODE)),karma,) ## Deploy Prometheus-operator stack + metrics-server + backends + Grafana/Perses + Headlamp (+ Karma in METRICS_MODE=prometheus)
 
 .PHONY: up
-# Grafana's Graft AI assistant (and the grafana-llm-app plugin it builds on —
+# Grafana's Graft AI assistant (and the grafana-llm-app plugin it builds on -
 # see helm/grafana/values.yaml) talks to an Azure AI Foundry endpoint by
 # default, so Ollama isn't part of the default flow. In LLM_BACKEND=ollama it
 # is: Ollama is the heaviest thing in the repo (multiple CPUs + several GiB of
 # RAM for CPU-only llama3.2:3b inference, ~2GB model pull; see
 # helm/ollama/values.yaml), so expect that first `make up` to take a while.
-# (Perses mode never deploys Ollama — see OLLAMA_TARGET above.)
+# (Perses mode never deploys Ollama - see OLLAMA_TARGET above.)
 up: cluster stack alloy $(OLLAMA_TARGET) validate demo ## Full setup: cluster + stack + Alloy + validate + demo app (+ Ollama in LLM_BACKEND=ollama, Grafana mode only)
 	@echo
 	@if [ "$(DASHBOARD_BACKEND)" = "perses" ]; then \
@@ -398,7 +398,7 @@ alertmanager-ui: ## Show the Alertmanager UI URL
 
 .PHONY: headlamp-ui
 headlamp-ui: ## Show the Headlamp UI URL
-	@echo "Headlamp at http://localhost:4466 (opens straight in — no token required)."
+	@echo "Headlamp at http://localhost:4466 (opens straight in - no token required)."
 
 .PHONY: karma-ui
 karma-ui: ## Show the Karma alert dashboard URL
@@ -417,7 +417,7 @@ logs-alloy: ## Tail Alloy logs
 
 # ---- Teardown ----------------------------------------------------------------
 .PHONY: clean
-clean: ## Uninstall all helm releases (keep the cluster) — also use this before switching DASHBOARD_BACKEND
+clean: ## Uninstall all helm releases (keep the cluster) - also use this before switching DASHBOARD_BACKEND
 	-@for r in ollama karma headlamp alloy grafana grafana-operator perses perses-operator pyroscope tempo loki mimir metrics-server kube-prometheus-stack; do \
 		helm uninstall $$r -n $(NAMESPACE) 2>/dev/null || true; \
 	done
@@ -456,7 +456,7 @@ demo-deploy: ## Deploy the otel-demo app (set DEMO_LOADGEN=true to also deploy t
 		echo ">> loadgen: enabled (DEMO_LOADGEN=true)"; \
 		kubectl apply -f $(DEMO_DIR)/k8s/optional/loadgen.yaml; \
 	else \
-		echo ">> loadgen: disabled (DEMO_LOADGEN=$(DEMO_LOADGEN)) — drive traffic from the web UI at :8080"; \
+		echo ">> loadgen: disabled (DEMO_LOADGEN=$(DEMO_LOADGEN)) - drive traffic from the web UI at :8080"; \
 		kubectl delete -f $(DEMO_DIR)/k8s/optional/loadgen.yaml --ignore-not-found; \
 	fi
 	@echo ">> waiting for otel-demo deployments to become Available..."
