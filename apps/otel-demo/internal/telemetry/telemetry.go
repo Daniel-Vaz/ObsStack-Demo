@@ -9,6 +9,11 @@
 // The logger injects the active span's trace id under the key "trace_id" so
 // Grafana's Loki datasource links each log line to its Tempo trace out of the
 // box (Alloy also promotes it to structured metadata under the same name).
+//
+// Traces and profiles are joined the same way, one layer down: the tracer
+// provider is wrapped by otel-profiling-go, which tags the Go runtime's pprof
+// labels with trace_id/span_id so the scraped CPU profile carries them into
+// Pyroscope. See docs/correlation.md for the full cross-signal picture.
 package telemetry
 
 import (
@@ -17,6 +22,7 @@ import (
 	"log/slog"
 	"os"
 
+	otelpyroscope "github.com/grafana/otel-profiling-go"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
@@ -68,7 +74,24 @@ func Init(ctx context.Context, serviceName string) (*Providers, error) {
 		sdktrace.WithBatcher(texp),
 		sdktrace.WithResource(res),
 	)
-	otel.SetTracerProvider(tp)
+
+	// Wrap the provider so every span also annotates the Go runtime's pprof
+	// labels with its trace/span id, and stamps a "pyroscope.profile.id"
+	// attribute on the local root span. That attribute is what makes Grafana
+	// render an *embedded* flame graph inside the span detail - profiles for
+	// this exact span, not just for this service at this time.
+	//
+	// This needs no Pyroscope SDK and no push: otelpyroscope only calls
+	// runtime/pprof.SetGoroutineLabels, so the labels ride along in the CPU
+	// profile Alloy already scrapes from /debug/pprof/profile. The app still
+	// pushes nothing and still names no backend.
+	//
+	// Defaults are deliberate: span_id/span_name are recorded for the *local
+	// root span* only (child spans' samples roll up into it), which keeps
+	// Pyroscope's label cardinality to one series per inbound request instead
+	// of one per span. See docs/correlation.md.
+	traced := otelpyroscope.NewTracerProvider(tp)
+	otel.SetTracerProvider(traced)
 	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
 		propagation.TraceContext{}, propagation.Baggage{},
 	))
@@ -90,7 +113,10 @@ func Init(ctx context.Context, serviceName string) (*Providers, error) {
 	})).With("service", serviceName))
 
 	return &Providers{
-		Tracer:   tp.Tracer(serviceName),
+		// Tracer comes from the wrapped provider so manually-created spans get
+		// the pprof labels too; shutdown stays on the raw SDK provider, which
+		// is the one that actually owns the batcher.
+		Tracer:   traced.Tracer(serviceName),
 		shutdown: []func(context.Context) error{tp.Shutdown, mp.Shutdown},
 	}, nil
 }

@@ -16,6 +16,9 @@ datasources:
       prometheusType: Mimir
       timeInterval: 15s
       manageAlerts: false
+      exemplarTraceIdDestinations:
+        - name: trace_id
+          datasourceUid: tempo
 
   - name: Loki
     uid: loki
@@ -45,6 +48,10 @@ datasources:
         datasourceUid: mimir
       tracesToProfiles:
         datasourceUid: pyroscope
+        profileTypeId: process_cpu:cpu:nanoseconds:cpu:nanoseconds
+        tags:
+          - key: service.name
+            value: service_name
       serviceMap:
         datasourceUid: mimir
       nodeGraph:

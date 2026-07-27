@@ -24,7 +24,9 @@ logs, traces, profiles - plus the plumbing to collect, store, and view them.
 
 Grafana itself isn't covered separately - it's the **single pane of glass** that
 queries all of the datasources above. Everything you store in Mimir, Loki, Tempo,
-and Pyroscope is explored through Grafana at `http://localhost:3000`.
+and Pyroscope is explored through Grafana at `http://localhost:3000`. How those
+four stores link to *each other* - log line to trace, trace to flame graph - is
+documented in [correlation.md](../correlation.md).
 
 ## How they fit together
 

@@ -147,6 +147,7 @@ cluster-internal - demo apps push to them via the in-cluster Service DNS.
 └── docs/
     ├── architecture.md            # deeper design notes (the "why")
     ├── otel-instrumentation.md    # how the demo app is OTel-instrumented
+    ├── correlation.md             # how the four signals link to each other
     ├── metrics-modes.md           # an alternate metrics-collection mode for testing
     ├── llm-backends.md            # an alternate AI-assistant model backend for testing
     ├── dashboard-backends.md      # an alternate dashboard backend (Perses) for testing
@@ -211,9 +212,17 @@ then open Grafana (`http://localhost:3000`, admin/admin) and:
 - **Explore → Loki**: `{namespace="otel-demo"}`; click a line's `trace_id` to jump
   to its Tempo trace.
 - **Explore → Mimir**: query `demo_orders_total` or
-  `http_server_request_duration_seconds_count`.
+  `http_server_request_duration_seconds_bucket`; turn on **Exemplars** and click
+  a dot to jump to the trace behind that sample.
 - **Explore → Pyroscope**: flame graph for the `payment` service shows the CPU
-  hot path.
+  hot path - or get there from a `payment` span, which carries an embedded flame
+  graph for that single request.
+
+>[!TIP]
+>Those "pre-wired links" are the point of the whole stack: every signal reaches
+>every other one, including per-span flame graphs and metric exemplars. What
+>joins each pair - and the one direction that still isn't joined - is documented
+>in [docs/correlation.md](docs/correlation.md).
 
 >[!NOTE]
 >![Grafana Explore split view: a Tempo trace on the left linked to its correlated Loki log line on the right by trace_id](docs/images/grafana-traces-to-logs.png)

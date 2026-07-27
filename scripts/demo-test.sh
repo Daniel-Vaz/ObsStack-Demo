@@ -48,6 +48,25 @@ mimir_has_app_metric() {
 check "Mimir has app HTTP metrics (remote-written from Prometheus)" \
   with_port_forward svc/mimir-gateway 80 -- mimir_has_app_metric
 
+# ---- Exemplars: metrics carry a trace_id (metrics -> traces) ------------------
+# Three independent things have to hold for this to pass, and each fails
+# silently on its own: the app must serve OpenMetrics (plain text can't carry
+# exemplars), Mimir must have exemplar storage enabled
+# (max_global_exemplars_per_user > 0, else they're accepted and dropped), and
+# Alloy must forward them (send_exemplars, on by default). See
+# docs/correlation.md.
+info "Exemplars: checking Mimir stored trace_id exemplars on the app's histogram..."
+mimir_has_exemplars() {
+  local out
+  out="$(curl -s --get "localhost:${PF_PORT}/prometheus/api/v1/query_exemplars" \
+        --data-urlencode 'query=http_server_request_duration_seconds_bucket' \
+        --data-urlencode "start=$(( $(date +%s) - 900 ))" \
+        --data-urlencode "end=$(date +%s)")"
+  echo "$out" | grep -q '"status":"success"' && echo "$out" | grep -q '"trace_id"'
+}
+check "Mimir has trace_id exemplars (metrics link to traces)" \
+  with_port_forward svc/mimir-gateway 80 -- mimir_has_exemplars
+
 # ---- Traces: frontend traces reached Tempo -----------------------------------
 info "Traces: searching Tempo for service.name=frontend..."
 tempo_has_frontend() {
@@ -75,6 +94,10 @@ check "Loki returns app logs containing a trace_id" \
   with_port_forward svc/loki 3100 -- loki_has_app_logs
 
 # ---- Profiles: payment profiles reached Pyroscope ----------------------------
+# Asserting the *label value* (not just "some profile arrived") is deliberate:
+# service_name=payment is the join key the Tempo datasource's tracesToProfiles
+# remaps span.service.name onto, so this doubles as a check that trace->profile
+# correlation can resolve. See docs/correlation.md.
 info "Profiles: checking Pyroscope has a service_name=payment label value..."
 pyroscope_has_payment() {
   local out start end
@@ -87,6 +110,32 @@ pyroscope_has_payment() {
 }
 check "Pyroscope has profiles for service payment" \
   with_port_forward svc/pyroscope 4040 -- pyroscope_has_payment
+
+# ---- Span profiles: profiles carry span ids (traces -> profiles, per span) ----
+# span_id is deliberately *not* a Pyroscope series label (it would explode
+# cardinality), so it can't be checked with LabelValues like service_name above.
+# Pyroscope keeps it as a per-sample label and exposes it through a dedicated
+# span-selector query - which is exactly what Grafana's embedded flame graph
+# calls. Querying with an empty selector returns everything; querying a
+# nonsense span id returns an empty flame graph. If the two differ, the span
+# index was built, which means otel-profiling-go's pprof labels survived the
+# scrape into Pyroscope. See docs/correlation.md.
+info "Span profiles: checking Pyroscope built a span index for payment..."
+pyroscope_has_span_index() {
+  local args start end all none
+  start="$(( ($(date +%s) - 900) * 1000 ))"
+  end="$(( $(date +%s) * 1000 ))"
+  args='"profileTypeID":"process_cpu:cpu:nanoseconds:cpu:nanoseconds","labelSelector":"{service_name=\"payment\"}","start":'"$start"',"end":'"$end"
+  span_query() {
+    curl -s -X POST "localhost:${PF_PORT}/querier.v1.QuerierService/SelectMergeSpanProfile" \
+      -H 'Content-Type: application/json' -d "{$args,\"spanSelector\":[$1]}" | wc -c
+  }
+  all="$(span_query '')"
+  none="$(span_query '"ffffffffffffffff"')"
+  [ "$all" -gt "$none" ]
+}
+check "Pyroscope answers span-profile queries for payment" \
+  with_port_forward svc/pyroscope 4040 -- pyroscope_has_span_index
 
 echo
 if [[ "$FAILS" -eq 0 ]]; then

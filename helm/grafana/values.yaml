@@ -49,6 +49,15 @@ datasources:
       # false for the METRICS_MODE=prometheus mode, where the ruler is disabled
       # and this probe would otherwise 502.
       manageAlerts: true
+      # metrics -> traces. Renders exemplars as clickable dots on a graph and
+      # sends each one to Tempo. `name` is the *exemplar label* carrying the id
+      # (the OTel SDK emits trace_id + span_id), and datasourceUid is where to
+      # take it. This is only the last link in the chain - it needs the app to
+      # serve OpenMetrics and Mimir to have exemplar storage enabled, or there
+      # will simply be no dots to click. See docs/correlation.md.
+      exemplarTraceIdDestinations:
+        - name: trace_id
+          datasourceUid: tempo
 
   - name: Loki
     uid: loki
@@ -79,9 +88,32 @@ datasources:
       # trace -> metrics (span/service-graph metrics live in Mimir)
       tracesToMetrics:
         datasourceUid: mimir
-      # trace -> profiles
+      # trace -> profiles (jump to the Pyroscope flame graph for the span's
+      # service, around the span's own time window).
+      #
+      # Grafana builds the Pyroscope query out of the span: `profileTypeId`
+      # picks *which* profile, `tags` maps span attributes onto Pyroscope label
+      # names, and the time range is the span's start/end widened by 60s either
+      # side (fixed by Grafana - there's no spanStartTimeShift here like there
+      # is for tracesToLogsV2). That padding is what makes this work at all:
+      # Alloy scrapes pprof every 15s, so a millisecond-long span would
+      # otherwise fall between two profile samples.
+      #
+      # `profileTypeId` is required, not cosmetic - with it unset Grafana has no
+      # valid query to run and the link lands on an empty panel. process_cpu is
+      # the delta CPU profile Alloy scrapes from /debug/pprof/profile.
+      #
+      # The `tags` remap is the whole contract: OTel attribute keys contain
+      # dots, Pyroscope label names can't. `service.name` is set by the app
+      # (telemetry.Init) and `service_name` by Alloy's discovery.relabel from
+      # the container name - they line up because every demo container is named
+      # after its service. See docs/correlation.md.
       tracesToProfiles:
         datasourceUid: pyroscope
+        profileTypeId: process_cpu:cpu:nanoseconds:cpu:nanoseconds
+        tags:
+          - key: service.name
+            value: service_name
       serviceMap:
         datasourceUid: mimir
       nodeGraph:
@@ -102,6 +134,84 @@ datasources:
       implementation: prometheus
       # Let Grafana surface the alerts held in this Alertmanager.
       handleGrafanaManagedAlerts: false
+
+# Grafana Correlations - the cross-signal jumps that have no home in a
+# datasource's own jsonData. `tracesToLogsV2`/`tracesToProfiles` above only
+# exist because the *Tempo* datasource has fields for them; Loki and Prometheus
+# have no "link to profiles" setting, so logs->profiles and metrics->profiles
+# have to be expressed as Correlations instead.
+#
+# These are applied by a post-install/post-upgrade Job that calls Grafana's
+# Correlations API (see templates/correlations.yaml for why the Grafana Operator
+# can't provision them, and docs/correlation.md for the wider picture).
+#
+# `config.field` names the field in the *source* result that carries the link;
+# any field on that row is then available to the target query as ${field}.
+correlations:
+  # Logs -> profiles.
+  #
+  # `field` must name a real field on the Loki data frame, and a Loki log frame
+  # has exactly these: labels, Time, Line, tsNs, labelTypes, id. Stream labels
+  # like service_name are *inside* the `labels` map, not fields of their own -
+  # so `field: service_name` matches nothing and Grafana renders no link at all
+  # (it drops any link whose variables can't all be resolved). Hence `Line`,
+  # which also puts the link where you'd click for it: the log row's detail.
+  #
+  # Grafana does inject stream labels as variables, but only for frames tagged
+  # as dataplane log frames; these aren't, so ${service_name} would still be
+  # undefined. A regex transformation over the line itself avoids depending on
+  # that entirely: the app's slog handler writes `"service":"payment"` into
+  # every line (telemetry.Init's .With("service", ...)), and `mapValue` binds
+  # capture group 1 to ${service} for the target query below.
+  #
+  # `transformations[].field` is deliberately omitted so the transformation
+  # reads whichever field the correlation is attached to. Grafana rewrites
+  # `Line` to the body field name on dataplane frames, and omitting it here
+  # means the transformation follows that rename instead of breaking.
+  - sourceUID: loki
+    targetUID: pyroscope
+    label: Profiles for this service
+    description: CPU flame graph for the service that emitted this log line
+    config:
+      field: Line
+      transformations:
+        - type: regex
+          expression: '"service":"([^"]+)"'
+          mapValue: service
+      target:
+        queryType: profile
+        profileTypeId: process_cpu:cpu:nanoseconds:cpu:nanoseconds
+        labelSelector: '{service_name="${service}"}'
+
+  # Metrics -> profiles. Joined on `pod`: a label both sides already carry
+  # verbatim (Alloy sets it on the Pyroscope side from pod discovery, and it's
+  # on every scraped series), which pins the flame graph to the single replica
+  # whose metric you clicked instead of averaging the service.
+  #
+  # >> This link only appears in Explore's *Table* view. <<
+  #
+  # Not a bug to fix here - it's the shape of the data. A Prometheus range query
+  # returns a time-series frame whose only fields are `Time` and the metric
+  # name; the labels hang off the value field rather than being fields, and
+  # Grafana only injects labels as link variables for log frames. The table
+  # format is the one that pivots each label into its own column, which is what
+  # gives `pod` a field to attach to (Grafana's correlation code special-cases
+  # that frame's `rawPrometheus` visualisation type for exactly this).
+  #
+  # So: run the query as **instant + Table** to use this. In the graph view the
+  # equivalent route is metrics -> traces (exemplars, wired on the Mimir
+  # datasource above) -> profiles, which is one extra hop but needs no view
+  # switch. See docs/correlation.md.
+  - sourceUID: mimir
+    targetUID: pyroscope
+    label: Profiles for this pod
+    description: CPU flame graph for the pod behind this series (Table view)
+    config:
+      field: pod
+      target:
+        queryType: profile
+        profileTypeId: process_cpu:cpu:nanoseconds:cpu:nanoseconds
+        labelSelector: '{pod="${pod}"}'
 
 # Grafana LLM app plugin (grafana-llm-app), provisioned to talk to an Azure AI
 # Foundry endpoint. This gives Grafana's built-in LLM features (and the Graft

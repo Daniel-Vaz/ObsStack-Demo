@@ -40,6 +40,14 @@ ships the profiles to Pyroscope.
   **filesystem** storage.
 - The demo's `payment` service deliberately runs a tight hashing loop
   (`burnCPU`) so there's an **obvious hot path** to spot in the flame graph.
+- Profiles are **linked to traces** two ways: from any span in
+  [Tempo](./tempo.md), *Profiles for this span* opens the flame graph for that
+  span's service, and each service's root span carries an **embedded flame graph
+  for that one request** (via `otel-profiling-go`, which needs no Pyroscope SDK
+  and no push - it just labels the pprof data Alloy already scrapes).
+- Logs and metrics link here too, as Grafana **Correlations**: expand a log row
+  for *Profiles for this service*, or use *Profiles for this pod* on a metric in
+  Table view. See [correlation.md](../correlation.md).
 
 ## Try it
 
@@ -47,6 +55,11 @@ ships the profiles to Pyroscope.
 - Look at the CPU flame graph - the wide `burnCPU` / hashing frame is the
   intentional hot spot.
 - Narrow the time range to a burst of order traffic and watch the profile change.
+- Now arrive the other way round: **Explore → Tempo**, open a trace, expand the
+  `payment` service's `GET /pay` span, and you get a flame graph for **that one
+  request** inline - plus a **Profiles for this span** link to the wider
+  service view. Reached from the request that was slow, rather than by guessing
+  which service to look at.
 
 ![Grafana Profiles Drilldown showing a CPU flame graph and top-functions table for a service scraped by Pyroscope](../images/grafana-drilldown-profiles.png)
 *Profiles Drilldown over the Pyroscope datasource - CPU-time-over-time on top, the flame graph and top-functions table below. Wider frames = more CPU.*

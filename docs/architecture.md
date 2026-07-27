@@ -159,10 +159,27 @@ ConfigMap); the Operator owns the Deployment.
 - **Everything provisioned as CRs, not files**: `templates/datasources.yaml` renders one
   `GrafanaDatasource` per entry in `values.yaml`'s `datasources` list (`uid`, `type`,
   `url`, `isDefault`, `jsonData` - including the Tempo/Loki/Mimir/Pyroscope cross-signal
-  correlations). The Operator reconciles each straight through the Grafana API rather than
-  writing a provisioning file, so `instanceSelector` - a label match against the `Grafana`
-  CR (`grafana-instance: "grafana"`, see `templates/_helpers.tpl`) - is how each CR finds
+  correlations, documented in [correlation.md](./correlation.md)). The Operator reconciles
+  each straight through the Grafana API rather than writing a provisioning file, so
+  `instanceSelector` - a label match against the `Grafana` CR
+  (`grafana-instance: "grafana"`, see `templates/_helpers.tpl`) - is how each CR finds
   "its" Grafana instance instead of a file path.
+- **Grafana Correlations need a Job, because the CR can't carry them**: the
+  datasource-to-datasource links this stack ships (`derivedFields`, `tracesToLogsV2`,
+  `tracesToMetrics`, `tracesToProfiles`, `exemplarTraceIdDestinations`) all live under
+  `jsonData`, which the CR passes through as raw JSON - so they provision fine. Grafana's
+  more general [Correlations](https://grafana.com/docs/grafana/latest/administration/correlations/)
+  (arbitrary source→target jumps, e.g. a Loki log line straight to a Pyroscope flame
+  graph) are provisioned as a sibling `correlations` block in the *datasource provisioning
+  file*, there's no `provisioning/correlations` directory to use instead, and the
+  Operator's `GrafanaDatasourceInternal` type has no such field or `jsonData`-style escape
+  hatch. Rather than give up the CR model - a file-based datasources provisioning file
+  would put a second writer on datasources the Operator already owns -
+  [`templates/correlations.yaml`](../helm/grafana/templates/correlations.yaml) applies them
+  through Grafana's Correlations **HTTP API** from a post-install/post-upgrade hook Job. It
+  waits for Grafana and for each referenced datasource to exist (both arrive asynchronously
+  via the Operator), and reconciles by `(sourceUID, label)` so re-runs converge. See
+  [correlation.md](./correlation.md).
 - **Dashboards arrive via the k8s-sidecar ConfigMap convention**: kube-prometheus-stack
   ships its bundled default dashboards as ConfigMaps labelled `grafana_dashboard: "1"`.
   Since a Grafana CR's `spec.deployment` is a raw pod-spec *patch* (not a chart with a
@@ -380,16 +397,22 @@ driving traffic by hand; an optional `loadgen` (off by default, enable with
 | Signal   | App emits | Stack path |
 |----------|-----------|-----------|
 | Traces   | OTel SDK, OTLP/gRPC to Alloy (`OTEL_EXPORTER_OTLP_ENDPOINT`) | Alloy `otelcol.receiver.otlp` → Tempo |
-| Metrics  | OTel Prometheus exporter on `/metrics` + a `PodMonitor` | Alloy scrape → remote_write → Mimir |
+| Metrics  | OTel Prometheus exporter on `/metrics` (OpenMetrics, with `trace_id` exemplars) + a `PodMonitor` | Alloy scrape → remote_write → Mimir |
 | Rules    | `PrometheusRule` (`apps/otel-demo/k8s/prometheusrules.yaml`) | Synced by Alloy into Mimir's ruler |
 | Logs     | `slog` JSON to stdout with a `trace_id` field | Alloy pod-log tail → Loki |
-| Profiles | Go `net/http/pprof` + `pyroscope.io/scrape: "true"` | Alloy `pyroscope.scrape` → Pyroscope |
+| Profiles | Go `net/http/pprof` + `pyroscope.io/scrape: "true"`, with `span_id`/`trace_id` pprof labels from `otel-profiling-go` | Alloy `pyroscope.scrape` → Pyroscope |
 
-Two constraints the app respects so the stack stays untouched:
+Three constraints the app respects so the stack stays untouched:
 
 - **Log field spelling**: the trace id is logged as `trace_id` to match the Loki datasource
   `derivedFields` regex in `helm/grafana/values.yaml` (and the structured-metadata key Alloy
   promotes), so logs auto-link to traces.
+- **Container name == service name**: each container is named after the service it runs
+  (`payment`, `checkout`, ...), because Alloy derives Pyroscope's `service_name` label from
+  the container name while the span's `service.name` comes from `telemetry.Init`. The Tempo
+  datasource's `tracesToProfiles` joins the two by remapping the key (`service.name` →
+  `service_name`), which only lands if the *values* already agree - see
+  [correlation.md](./correlation.md).
 - **Single container port**: each service serves app routes, `/metrics`, and
   `/debug/pprof/*` on one port, so Alloy's `discovery.kubernetes` (which infers the scrape
   address from the declared container port) resolves exactly one Pyroscope target per pod.

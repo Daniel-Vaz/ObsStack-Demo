@@ -24,6 +24,19 @@ import (
 // like something you'd genuinely alert on.
 var errCardDeclined = errors.New("card declined: insufficient funds")
 
+// defaultBurnIterations is sized against the Go CPU profiler's 10ms sampling
+// interval, not for realism: at ~8ns per sha256 round this is roughly 25ms of
+// CPU per request, so each /pay span reliably collects two or three stack
+// samples.
+//
+// This matters for *span* profiles specifically. A span whose CPU time lands
+// under one sampling interval usually gets zero samples, so Grafana's embedded
+// "profiles for this span" flame graph comes back empty even though everything
+// is wired correctly - the request simply finished between two samples. The
+// earlier value (15000, ~2ms) demonstrated the service-level flame graph fine
+// but was invisible per-span. Override with PAYMENT_BURN_ITERATIONS.
+const defaultBurnIterations = 200000
+
 func main() {
 	ctx := context.Background()
 	tel, err := telemetry.Init(ctx, "payment")
@@ -37,6 +50,7 @@ func main() {
 	// Baseline failure probability for traffic that doesn't carry a per-request
 	// fail_rate (e.g. the optional loadgen). The web UI overrides this per call.
 	defaultFailRate := getfloat("FAIL_RATE", 0)
+	burnIterations := getint("PAYMENT_BURN_ITERATIONS", defaultBurnIterations)
 
 	// A dedicated business counter for simulated declines, exported to
 	// Prometheus as demo_payment_failures_total - the signal the PrometheusRule
@@ -54,7 +68,7 @@ func main() {
 
 		_, span := tracer.Start(ctx, "authorize-card")
 		defer span.End()
-		sum := burnCPU(15000) // ~ a few ms of hashing, visible in the flame graph
+		sum := burnCPU(burnIterations) // hashing hot path, visible in the flame graph
 
 		// Simulated failure: record it on the span (error status + exception
 		// event), bump the metric, log at error level, and return 500. All three
@@ -84,6 +98,15 @@ func getfloat(key string, def float64) float64 {
 	if v := os.Getenv(key); v != "" {
 		if f, err := strconv.ParseFloat(v, 64); err == nil {
 			return f
+		}
+	}
+	return def
+}
+
+func getint(key string, def int) int {
+	if v := os.Getenv(key); v != "" {
+		if i, err := strconv.Atoi(v); err == nil {
+			return i
 		}
 	}
 	return def

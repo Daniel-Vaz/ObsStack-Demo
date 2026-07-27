@@ -168,13 +168,23 @@ Metrics work differently from traces. Instead of the app *pushing* to a collecto
 [`httpx.NewMux`](../apps/otel-demo/internal/httpx/httpx.go#L26) serves it:
 
 ```go
-mux.Handle("/metrics", promhttp.Handler())   // the collector scrapes this
+mux.Handle("/metrics", promhttp.HandlerFor(prometheus.DefaultGatherer, promhttp.HandlerOpts{
+    EnableOpenMetrics: true, // the collector scrapes this
+}))
 ```
 
 A `PodMonitor` tells the collector which pods to scrape (it selects the `scrape: metrics`
 pod label). Alloy reads that `PodMonitor` straight from the Prometheus-Operator CRDs,
 scrapes the endpoint, and remote-writes to Mimir. **You expose `/metrics`; the platform
 does the rest.**
+
+> **Why not plain `promhttp.Handler()`?** Because that serves the classic text format,
+> which has no syntax for **exemplars** - the trace ID the OTel SDK staples to each sample
+> so a spike on a graph can link to the request that caused it. The SDK attaches them
+> automatically; the default handler would silently drop every one. Exemplars are an
+> OpenMetrics feature, so the handler has to be built with it enabled. Scrapers asking for
+> the old format still get it, just without exemplars. (Two more things have to be true
+> before the link works end to end - see [correlation.md](./correlation.md).)
 
 ## 3. Logs - structured JSON, correlated to traces
 
@@ -239,6 +249,47 @@ annotations:
 ([`burnCPU`](../apps/otel-demo/cmd/payment/main.go#L50)) so the flame graph in Pyroscope has
 an obvious hot path to show off.
 
+### Per-span flame graphs, without an extra SDK
+
+One line in `Init` wraps the tracer provider so profiles can be scoped to a single span:
+
+```go
+otel.SetTracerProvider(otelpyroscope.NewTracerProvider(tp))
+```
+
+[`otel-profiling-go`](https://github.com/grafana/otel-profiling-go) tags the Go runtime's
+pprof labels with `span_id`/`trace_id` and stamps a `pyroscope.profile.id` attribute on
+each local root span, which is what makes Grafana draw a flame graph *inside* the span
+detail. It needs **no Pyroscope SDK and no push**: it only calls
+`runtime/pprof.SetGoroutineLabels`, so the labels ride along in the profile Alloy already
+scrapes. The rule below survives intact - the app still pushes nothing.
+
+One caveat is physics rather than config: Go samples CPU at 100Hz, so a span burning less
+than 10ms usually collects zero samples and its flame graph comes back empty. That's why
+`payment`'s hashing loop is sized to ~25ms (`PAYMENT_BURN_ITERATIONS`).
+
+### Linking a span to its service profile
+
+Same idea as the `trace_id` field above, but the join key is the **service name** rather
+than an ID the app writes out. Grafana's Tempo datasource turns a span into a Pyroscope
+query by remapping the span attribute `service.name` onto the Pyroscope label
+`service_name` - and those two names are set in completely different places:
+
+```go
+telemetry.Init(ctx, "payment")   // -> span attribute service.name = "payment"
+```
+
+```yaml
+containers:
+  - name: payment                # -> Alloy relabels this to service_name = "payment"
+```
+
+> **Watch the naming:** nothing enforces that a container is named after the service inside
+> it. Break the convention and profiles still flow and traces still flow - only the
+> *Profiles for this span* link quietly returns an empty flame graph. The full contract,
+> and the `tracesToProfiles` config that depends on it, is in
+> [correlation.md](./correlation.md).
+
 ## Putting it together: one request, four signals
 
 When a request hits `frontend`'s `/order` (from the web UI or the loadgen), it
@@ -250,7 +301,9 @@ produces all four at once:
 2. **Metrics:** the RED histograms tick up on every service, and `demo_orders` increments.
 3. **Logs:** `"order placed"`, `"checkout complete"`, `"payment authorized"` - each tagged
    with the same `trace_id`, so they're one click away from the trace above.
-4. **Profiles:** `payment`'s CPU time shows up in `burnCPU` in the flame graph.
+4. **Profiles:** `payment`'s CPU time shows up in `burnCPU` in the flame graph - reachable
+   in one click from the `payment` span, which is scoped to the same service and the same
+   moment.
 
 ## The three ideas to take away
 
@@ -274,6 +327,8 @@ If you remember nothing else about instrumenting a service with OTel:
 - [`internal/httpx/httpx.go`](../apps/otel-demo/internal/httpx/httpx.go) - the instrumented
   server and client.
 - Any `cmd/*/main.go` - see how a real handler uses the helpers.
+- [correlation.md](./correlation.md) - how the four signals link to each other once
+  they're stored, and what each link joins on.
 - [architecture.md](./architecture.md) - how the collectors and stores are configured on
   the platform side.
 </content>

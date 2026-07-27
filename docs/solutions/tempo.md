@@ -41,9 +41,11 @@ to [Alloy](./alloy.md), which forwards them to Tempo.
   pod, laptop-friendly.
 - Span metrics / service-graph data flow back to Mimir, powering RED dashboards
   and the service graph.
-- Grafana's Tempo datasource is pre-wired with **trace-to-logs** and
-  **trace-to-metrics** links, so from a span you can jump to its logs in
-  [Loki](./loki.md) or its metrics in Mimir.
+- Grafana's Tempo datasource is pre-wired with **trace-to-logs**,
+  **trace-to-metrics** and **trace-to-profiles** links, so from a span you can
+  jump to its logs in [Loki](./loki.md), its metrics in Mimir, or its service's
+  flame graph in [Pyroscope](./pyroscope.md). Tempo is the **hub** of this stack's
+  correlation graph - see [correlation.md](../correlation.md).
 
 ## Try it
 
@@ -52,7 +54,8 @@ to [Alloy](./alloy.md), which forwards them to Tempo.
 - Open the **Service Graph** tab to see the topology and RED stats between
   services.
 - From a span, follow the pre-wired links to the exact logs and metrics for that
-  request.
+  request - or **Profiles for this span** to see where that service was spending
+  CPU at the time.
 
 ![Grafana Traces Drilldown showing span rate, duration heatmap, and attribute comparison for Tempo](../images/grafana-drilldown-traces.png)
 *Traces Drilldown over the Tempo datasource - span rate, a duration heatmap, and per-attribute breakdowns of the demo app's traces.*

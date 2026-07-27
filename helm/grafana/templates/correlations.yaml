@@ -1,0 +1,168 @@
+{{- if .Values.correlations }}
+# Grafana Correlations - the arbitrary source->target signal jumps that don't
+# fit in a datasource's own jsonData (logs -> profiles, metrics -> profiles).
+#
+# Why a Job instead of provisioning: Grafana only provisions correlations as a
+# `correlations:` block *inside a datasource provisioning file*, and there is no
+# /etc/grafana/provisioning/correlations directory to drop a standalone file in.
+# This stack provisions datasources as GrafanaDatasource CRs through the Grafana
+# Operator, whose GrafanaDatasourceInternal type has no `correlations` field and
+# no escape hatch for one (jsonData/secureJsonData are the only pass-through
+# fields). Writing a datasources provisioning file just to carry correlations
+# would put a second writer on datasources Grafana already manages via the
+# Operator's API calls - so instead this applies them through Grafana's
+# Correlations HTTP API, and datasources stay 100% Operator-managed.
+#
+# Reconciliation is by (sourceUID, label): the script removes any correlation
+# matching a pair it's about to create, then creates it - so re-running is
+# idempotent and correlations made by hand in the UI are left alone.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "grafana.fullname" . }}-correlations
+  labels:
+    {{- include "grafana.labels" . | nindent 4 }}
+data:
+  correlations.json: |-
+    {{- $items := list }}
+    {{- range .Values.correlations }}
+    {{- $item := dict "sourceUID" .sourceUID "targetUID" .targetUID "label" .label "type" (default "query" .type) "config" .config }}
+    {{- if .description }}{{ $_ := set $item "description" .description }}{{ end }}
+    {{- $items = append $items $item }}
+    {{- end }}
+    {{ toJson $items }}
+
+  apply.py: |-
+    """Apply this chart's correlations through Grafana's HTTP API.
+
+    Runs as a post-install/post-upgrade Helm hook. Grafana itself is created
+    asynchronously by the Grafana Operator (the Deployment does not exist yet
+    when helm applies this release), so the script polls for Grafana *and* for
+    every datasource a correlation references before writing anything.
+    """
+    import base64
+    import json
+    import os
+    import sys
+    import time
+    import urllib.error
+    import urllib.request
+
+    BASE = os.environ["GRAFANA_URL"].rstrip("/")
+    AUTH = base64.b64encode(
+        f"{os.environ['GRAFANA_USER']}:{os.environ['GRAFANA_PASSWORD']}".encode()
+    ).decode()
+    DEADLINE = time.time() + float(os.environ.get("WAIT_TIMEOUT_SECONDS", "540"))
+
+
+    def call(method, path, body=None):
+        data = json.dumps(body).encode() if body is not None else None
+        req = urllib.request.Request(BASE + path, data=data, method=method)
+        req.add_header("Authorization", "Basic " + AUTH)
+        req.add_header("Content-Type", "application/json")
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            raw = resp.read()
+        return json.loads(raw) if raw else {}
+
+
+    def wait_for(what, probe):
+        while True:
+            try:
+                if probe():
+                    return
+            except Exception as err:  # noqa: BLE001 - any failure means "not ready yet"
+                last = err
+            else:
+                last = "not ready"
+            if time.time() > DEADLINE:
+                sys.exit(f"timed out waiting for {what}: {last}")
+            time.sleep(5)
+
+
+    wait_for("Grafana to answer /api/health",
+             lambda: call("GET", "/api/health").get("database") == "ok")
+
+    desired = json.load(open("/config/correlations.json"))
+    if not desired:
+        print("no correlations declared; nothing to do")
+        raise SystemExit(0)
+
+    # The Operator reconciles GrafanaDatasource CRs through the same API we are
+    # about to call; a correlation referencing a datasource that hasn't landed
+    # yet is rejected, so wait them out rather than racing.
+    uids = sorted({c["sourceUID"] for c in desired} | {c["targetUID"] for c in desired})
+
+    def datasources_ready():
+        missing = []
+        for uid in uids:
+            try:
+                call("GET", f"/api/datasources/uid/{uid}")
+            except urllib.error.HTTPError:
+                missing.append(uid)
+        if missing:
+            raise RuntimeError("datasources not provisioned yet: " + ", ".join(missing))
+        return True
+
+    wait_for("datasources " + ", ".join(uids), datasources_ready)
+
+    existing = call("GET", "/api/datasources/correlations?limit=1000").get("correlations", [])
+    managed = {(c["sourceUID"], c["label"]) for c in desired}
+    for corr in existing:
+        if (corr.get("sourceUID"), corr.get("label")) in managed:
+            call("DELETE", f"/api/datasources/uid/{corr['sourceUID']}/correlations/{corr['uid']}")
+            print(f"replaced existing correlation {corr['uid']} ({corr['label']})")
+
+    for corr in desired:
+        source = corr["sourceUID"]
+        body = {k: v for k, v in corr.items() if k != "sourceUID"}
+        call("POST", f"/api/datasources/uid/{source}/correlations", body)
+        print(f"created {source} -> {corr['targetUID']}: {corr['label']}")
+
+    print(f"applied {len(desired)} correlation(s)")
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "grafana.fullname" . }}-correlations
+  labels:
+    {{- include "grafana.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "5"
+    # Deleted on success so re-runs start clean; a *failed* Job is deliberately
+    # left behind so `kubectl logs job/...` still explains why.
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 3
+  # Bounded so a broken Grafana can't hold `helm --wait` open past its timeout.
+  activeDeadlineSeconds: 600
+  template:
+    metadata:
+      labels:
+        {{- include "grafana.labels" . | nindent 8 }}
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: apply
+          # Reuses the k8s-sidecar image purely because it is python3-based and
+          # already pulled for the Grafana pod - one less image on a laptop
+          # cluster. Nothing sidecar-specific is used; any python3 image works.
+          image: {{ .Values.sidecar.image }}
+          command: ["python3", "/config/apply.py"]
+          env:
+            - name: GRAFANA_URL
+              value: http://{{ include "grafana.fullname" . }}-service.{{ .Release.Namespace }}.svc.cluster.local:3000
+            - name: GRAFANA_USER
+              value: {{ .Values.adminUser | quote }}
+            - name: GRAFANA_PASSWORD
+              value: {{ .Values.adminPassword | quote }}
+          volumeMounts:
+            - name: config
+              mountPath: /config
+          resources:
+            requests: { cpu: 25m, memory: 32Mi }
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "grafana.fullname" . }}-correlations
+{{- end }}

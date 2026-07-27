@@ -37,6 +37,12 @@ Mimir is the **long-term store for all metrics.** [Alloy](./alloy.md) does the
 scraping and remote-writes everything to Mimir, and Grafana's default metrics
 datasource points at Mimir.
 
+**Exemplar storage is enabled** (`max_global_exemplars_per_user`), which is off
+by default in Mimir. An exemplar is a trace ID attached to a single sample, so a
+spike on a graph links straight to one request that caused it - the first hop of
+metrics → traces → profiles. A zero here would accept exemplars and silently
+discard them; see [correlation.md](../correlation.md).
+
 Mimir's **ruler** is enabled: Alloy syncs `PrometheusRule` objects into it, the
 ruler evaluates them, and fires alerts to the kube-prometheus-stack Alertmanager
 (`structuredConfig.ruler.alertmanager_url` is pointed there explicitly, since

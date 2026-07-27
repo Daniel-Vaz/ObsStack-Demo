@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
@@ -30,7 +31,18 @@ import (
 func NewMux() *http.ServeMux {
 	mux := http.NewServeMux()
 
-	mux.Handle("/metrics", promhttp.Handler())
+	// promhttp.Handler() would serve the classic text format, which has no way
+	// to express exemplars - the OTel SDK attaches a trace_id/span_id exemplar
+	// to every counter add and histogram record, and they'd be silently dropped
+	// on the way out. Exemplars are an OpenMetrics feature, so the handler has
+	// to be built with it enabled; scrapers that ask for the old format still
+	// get it (content negotiation), just without exemplars.
+	//
+	// This is what lets a spike on a Mimir graph link straight to a Tempo trace.
+	// See docs/correlation.md.
+	mux.Handle("/metrics", promhttp.HandlerFor(prometheus.DefaultGatherer, promhttp.HandlerOpts{
+		EnableOpenMetrics: true,
+	}))
 
 	mux.HandleFunc("/debug/pprof/", pprof.Index)
 	mux.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)

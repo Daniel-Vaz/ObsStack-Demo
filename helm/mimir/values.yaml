@@ -48,6 +48,17 @@ mimir:
       max_global_series_per_user: 0
       ingestion_rate: 100000
       ingestion_burst_size: 200000
+      # Exemplar storage is OFF in Mimir by default (this limit defaults to 0),
+      # and a zero here silently discards every exemplar Alloy forwards - the
+      # write succeeds, the samples land, and only the trace links go missing.
+      # This is the storage half of metrics->traces correlation; the other
+      # halves are the app serving OpenMetrics (internal/httpx) and the Grafana
+      # datasource's exemplarTraceIdDestinations. See docs/correlation.md.
+      #
+      # Exemplars are held in an in-memory circular buffer per tenant, so this
+      # is a memory budget, not a retention setting: ~100k exemplars is a few
+      # tens of MB and plenty for a single-node demo.
+      max_global_exemplars_per_user: 100000
     # The chart's default alertmanager_url points at Mimir's own bundled
     # Alertmanager component, which is disabled below (alertmanager.enabled:
     # false) - there's only ever one Alertmanager in this demo, the one
