@@ -59,7 +59,8 @@ applied (via an extra `--values`) only when `METRICS_MODE=prometheus`:
 
 - [`helm/kube-prometheus-stack/values-prometheus-metrics.yaml`](../helm/kube-prometheus-stack/values-prometheus-metrics.yaml)
   enables Prometheus, widens its ServiceMonitor/PodMonitor selectors to every
-  namespace, and points its `remoteWrite` at Mimir's gateway.
+  namespace, and points its `remoteWrite` at Mimir's gateway (exemplars
+  included).
 - [`helm/alloy/values-prometheus-metrics.yaml`](../helm/alloy/values-prometheus-metrics.yaml)
   replaces Alloy's config with a logs/traces/profiles-only pipeline (no metrics
   section).

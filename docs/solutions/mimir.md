@@ -3,7 +3,7 @@
 **In one line:** the long-term, horizontally scalable home for your Prometheus
 metrics - think "Prometheus storage that never fills up."
 
-> Chart: `grafana/mimir-distributed` (v6.1.0) ·
+> Chart: `grafana/mimir-distributed` (v6.2.1) ·
 > config: [`helm/mimir/values.yaml`](../../helm/mimir/values.yaml) ·
 > queried through Grafana at `http://localhost:3000`
 

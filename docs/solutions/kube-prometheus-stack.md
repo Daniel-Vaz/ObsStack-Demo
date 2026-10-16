@@ -4,7 +4,7 @@
 it bundles Prometheus, the alerting stack, and the exporters that turn a raw
 cluster into a metrics-rich one.
 
-> Chart: `prometheus-community/kube-prometheus-stack` (v87.5.1) ·
+> Chart: `prometheus-community/kube-prometheus-stack` (v92.9.0) ·
 > config: [`helm/kube-prometheus-stack/values.yaml`](../../helm/kube-prometheus-stack/values.yaml) ·
 > UI: Alertmanager `http://localhost:9093`
 

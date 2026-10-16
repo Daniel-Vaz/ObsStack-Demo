@@ -5,7 +5,7 @@ type: application
 # Chart version is local to this repo; appVersion tracks the upstream Karma
 # release we pin in values.yaml.
 version: 0.1.0
-appVersion: v0.131
+appVersion: v0.133
 home: https://github.com/prymitive/karma
 sources:
   - https://github.com/prymitive/karma

@@ -3,7 +3,7 @@
 **In one line:** a clean, point-and-click web UI for browsing your Kubernetes
 cluster - pods, deployments, logs, and events - without living in `kubectl`.
 
-> Chart: `headlamp/headlamp` (v0.43.0) ·
+> Chart: `headlamp/headlamp` (v0.46.0) ·
 > config: [`helm/headlamp/values.yaml`](../../helm/headlamp/values.yaml) ·
 > UI: `http://localhost:4466`
 

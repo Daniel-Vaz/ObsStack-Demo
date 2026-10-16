@@ -78,6 +78,13 @@ doesn't need its own reconcile loop running for what follows, because
 - No extra RBAC is needed: `grafana/alloy`'s default ClusterRole already grants
   `get`/`list`/`watch` on `servicemonitors`/`podmonitors`/`prometheusrules`
   (`monitoring.coreos.com`).
+- The kubelet / kube-apiserver / CoreDNS ServiceMonitors authenticate with a bearer token
+  read from a Secret (KPS no longer emits `bearerTokenFile`, and Alloy rejects filesystem
+  references in ServiceMonitors anyway). KPS's default Secret belongs to its Prometheus
+  service account, which doesn't exist here, so they point at `alloy-scrape-token` - a
+  service-account token for Alloy's own identity, created by the alloy release
+  (`extraObjects` in [`helm/alloy/values.yaml`](../helm/alloy/values.yaml)). Alloy's
+  ClusterRole already grants `nodes/metrics` and the `/metrics` non-resource URL.
 
 **What KPS deploys**: Alertmanager, the Prometheus operator, kube-state-metrics, and
 node-exporter. **What we disable**: the bundled Grafana (`grafana.enabled: false` - Grafana
@@ -185,7 +192,7 @@ ConfigMap); the Operator owns the Deployment.
   Since a Grafana CR's `spec.deployment` is a raw pod-spec *patch* (not a chart with a
   `sidecar.dashboards.enabled` toggle),
   [`templates/grafana.yaml`](../helm/grafana/templates/grafana.yaml) adds a
-  `kiwigrid/k8s-sidecar` container (`quay.io/kiwigrid/k8s-sidecar:2.8.1`) that watches
+  `kiwigrid/k8s-sidecar` container (`quay.io/kiwigrid/k8s-sidecar:2.14.1`) that watches
   every namespace for that label and drops matches into a
   `path: /var/lib/grafana/dashboards` file provider - plus a `ClusterRole`/
   `ClusterRoleBinding` (`templates/rbac-sidecar.yaml`) granting the Grafana pod's
@@ -325,10 +332,9 @@ How the chart wires the plugins (see
   default. Both plugin blocks are gated on their `enabled` values, so setting
   `llm.enabled: false` / `graft.enabled: false` cleanly drops the env entries,
   the unsigned allow-list, and the provisioning.
-- **Graft is pinned to v0.2.0**: upstream's build/publish workflow fires on
-  `v*` tags, but releases are tagged `graft-v*`, so v0.2.0 is the newest tag
-  that ships a prebuilt zip (the v0.3.0–v0.6.x sources have no downloadable
-  artifact). Bump `graft.pluginUrl` if upstream publishes newer builds.
+- **Graft is pinned to graft-v0.6.8**: releases are tagged `graft-v*`, and
+  each ships a prebuilt zip (frontend + Go backend binaries) named after that
+  tag. Bump `graft.pluginUrl` to move to a newer release.
 
 > An opt-in mode that instead points the plugin at a local, key-less
 > [Ollama](https://github.com/otwld/ollama-helm) deployment is available for
@@ -371,7 +377,7 @@ Alloy config lives in [`helm/alloy/values.yaml`](../helm/alloy/values.yaml):
 ## Known caveats
 
 - **Chart repos**: Tempo is installed from the **`grafana-community`** repo
-  (`grafana-community/tempo` 2.2.3, "single binary mode") because the classic
+  (`grafana-community/tempo` 3.2.0, "single binary mode") because the classic
   `grafana/tempo` chart in the `grafana` repo is deprecated. Grafana is managed by the
   Grafana Operator, not a Helm chart - see
   [Grafana: Operator-managed via CRDs](#grafana-operator-managed-via-crds). kube-prometheus-stack

@@ -74,16 +74,16 @@ locally controlled values files under [`helm/`](helm/).
 
 | Component | Chart | Version | Role | Storage |
 |-----------|-------|---------|------|---------|
-| kube-prometheus-stack | `prometheus-community/kube-prometheus-stack` | 87.5.1 | Prometheus Operator + kube-state-metrics + node-exporter + Alertmanager (Grafana & Windows exporter disabled) | ephemeral |
-| metrics-server | `metrics-server/metrics-server` | 3.13.1 | kubelet resource metrics (`kubectl top`/HPA), scraped via its built-in ServiceMonitor | - |
-| Mimir     | `grafana/mimir-distributed` | 6.1.0 | metrics storage; ruler evaluates alerting rules | bundled MinIO |
-| Loki      | `grafana/loki`   | 7.0.0  | logs storage (SingleBinary) | filesystem |
-| Tempo     | `grafana-community/tempo`  | 2.2.3 | traces storage (single binary) | filesystem |
-| Pyroscope | `grafana/pyroscope` | 2.1.0 | profiles storage (monolithic `all` target) | filesystem |
-| Grafana Operator | `grafana/grafana-operator` | 5.24.0 | reconciles `helm/grafana`'s CRDs into a running Grafana | - |
+| kube-prometheus-stack | `prometheus-community/kube-prometheus-stack` | 92.9.0 | Prometheus Operator + kube-state-metrics + node-exporter + Alertmanager (Grafana & Windows exporter disabled) | ephemeral |
+| metrics-server | `metrics-server/metrics-server` | 3.14.0 | kubelet resource metrics (`kubectl top`/HPA), scraped via its built-in ServiceMonitor | - |
+| Mimir     | `grafana/mimir-distributed` | 6.2.1 | metrics storage; ruler evaluates alerting rules | bundled MinIO |
+| Loki      | `grafana/loki`   | 7.3.0  | logs storage (SingleBinary) | filesystem |
+| Tempo     | `grafana-community/tempo`  | 3.2.0 | traces storage (single binary) | filesystem |
+| Pyroscope | `grafana/pyroscope` | 2.4.0 | profiles storage (monolithic `all` target) | filesystem |
+| Grafana Operator | `grafana/grafana-operator` | 5.25.0 | reconciles `helm/grafana`'s CRDs into a running Grafana | - |
 | Grafana   | `helm/grafana` (first-party CRs: `Grafana`, `GrafanaDatasource`) | operator-managed | provisioned datasources + Kubernetes dashboards; installs the `grafana-llm-app` + Graft AI plugins (backed by Azure AI Foundry) | ephemeral |
-| Alloy     | `grafana/alloy`  | 1.10.0 | DaemonSet collector for metrics, logs, traces, profiles, and alerting rules | - |
-| Headlamp  | `headlamp/headlamp` | 0.43.0 | in-cluster dashboard (cluster-admin, no-login demo mode) | - |
+| Alloy     | `grafana/alloy`  | 1.13.1 | DaemonSet collector for metrics, logs, traces, profiles, and alerting rules | - |
+| Headlamp  | `headlamp/headlamp` | 0.46.0 | in-cluster dashboard (cluster-admin, no-login demo mode) | - |
 
 >[!NOTE]
 >Grafana Operator + Grafana are deployed only in the default

@@ -3,7 +3,7 @@
 **In one line:** log aggregation that's cheap because it indexes **labels, not
 the log text** - "like Prometheus, but for logs."
 
-> Chart: `grafana/loki` (v7.0.0, SingleBinary mode) ·
+> Chart: `grafana/loki` (v7.3.0, SingleBinary mode) ·
 > config: [`helm/loki/values.yaml`](../../helm/loki/values.yaml) ·
 > queried through Grafana at `http://localhost:3000`
 

@@ -49,6 +49,33 @@ prometheus:
     # points at Mimir, so this is what makes scraped metrics queryable.
     remoteWrite:
       - url: http://mimir-gateway.observability.svc.cluster.local/api/v1/push
+        # Forward the trace_id exemplars the demo app attaches to its
+        # histograms - the metrics->traces link (see docs/correlation.md).
+        # Off by default, and Prometheus only has exemplars to send at all
+        # with exemplar storage enabled below.
+        sendExemplars: true
+    enableFeatures:
+      - exemplar-storage
 
     resources:
       requests: { cpu: 200m, memory: 512Mi }
+
+# ---- Control-plane component monitors: auth ----
+# Restore the chart default: authenticate with the token Secret of KPS's own
+# Prometheus service account (rendered now that prometheus.enabled is true),
+# instead of the Alloy token values.yaml points them at for METRICS_MODE=alloy.
+kubeApiServer:
+  serviceMonitor:
+    authorization:
+      credentials:
+        name: '{{ include "kube-prometheus-stack.prometheus.tokenSecretName" . }}'
+kubelet:
+  serviceMonitor:
+    authorization:
+      credentials:
+        name: '{{ include "kube-prometheus-stack.prometheus.tokenSecretName" . }}'
+coreDns:
+  serviceMonitor:
+    authorization:
+      credentials:
+        name: '{{ include "kube-prometheus-stack.prometheus.tokenSecretName" . }}'

@@ -11,7 +11,7 @@
 # https://github.com/perses/perses-operator/blob/main/internal/operator/defaults.go
 # - but pinned here rather than trusted, per this repo's version-pinning
 # convention for every other component).
-image: docker.io/persesdev/perses:v0.53.1
+image: docker.io/persesdev/perses:v0.54.0
 
 containerPort: 8080
 

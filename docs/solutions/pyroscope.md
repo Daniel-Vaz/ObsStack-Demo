@@ -3,7 +3,7 @@
 **In one line:** continuous profiling - it answers "**where is my CPU/memory
 actually going?**" with flame graphs you can scroll back through time.
 
-> Chart: `grafana/pyroscope` (v2.1.0, monolithic `all` target) ·
+> Chart: `grafana/pyroscope` (v2.4.0, monolithic `all` target) ·
 > config: [`helm/pyroscope/values.yaml`](../../helm/pyroscope/values.yaml) ·
 > queried through Grafana at `http://localhost:3000`
 

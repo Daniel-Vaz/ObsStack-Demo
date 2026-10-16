@@ -3,7 +3,7 @@
 **In one line:** a local server that runs open LLMs (like `llama3.2:3b`) so
 Grafana's AI assistant can run with no external API key.
 
-> Chart: `ollama-helm/ollama` (1.65.0) ·
+> Chart: `ollama-helm/ollama` (1.88.0) ·
 > config: [`helm/ollama/values.yaml`](../../helm/ollama/values.yaml) ·
 > access: cluster-internal only - no web UI
 

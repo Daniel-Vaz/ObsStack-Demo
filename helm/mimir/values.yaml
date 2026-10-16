@@ -59,6 +59,11 @@ mimir:
       # is a memory budget, not a retention setting: ~100k exemplars is a few
       # tens of MB and plenty for a single-node demo.
       max_global_exemplars_per_user: 100000
+      # Mimir caps a rule group at 20 rules by default, but some of
+      # kube-prometheus-stack's groups are bigger (node-exporter: 26,
+      # prometheus: 23) - Alloy's mimir.rules.kubernetes sync gets a 400 for
+      # those and their alerts never reach the ruler. 0 = no limit.
+      ruler_max_rules_per_rule_group: 0
     # The chart's default alertmanager_url points at Mimir's own bundled
     # Alertmanager component, which is disabled below (alertmanager.enabled:
     # false) - there's only ever one Alertmanager in this demo, the one

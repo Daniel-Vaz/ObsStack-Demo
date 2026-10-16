@@ -38,22 +38,13 @@ tempo:
   # Generate service-graph and span metrics and remote-write them to Mimir
   # so the demo shows the traces->metrics correlation out of the box.
   #
-  # `local-blocks` is the key one for the Traces Drilldown app: that app is
-  # query-less and renders RED metrics via Tempo's TraceQL metrics API
-  # (`{ } | rate()` etc.), which is only served when the local-blocks processor
-  # is active. Without it Drilldown shows "no data" even though traces are
-  # searchable in Explore.
+  # TraceQL metrics (`{ } | rate()` etc.) - what the query-less Traces
+  # Drilldown app renders its RED views from - need no generator processor in
+  # Tempo 3.x: the live-store builds the blocks those queries read on its own
+  # (Tempo 2.x needed the `local-blocks` processor for this, which 3.0 removed).
   metricsGenerator:
     enabled: true
     remoteWriteUrl: "http://mimir-gateway.observability.svc.cluster.local/api/v1/push"
-    processor:
-      local_blocks:
-        # Persist local blocks so TraceQL metrics work over the full retention
-        # window, not just the most recent in-memory data.
-        flush_to_storage: true
-        # Keep client (non-server) spans too, so Drilldown can break down by
-        # any span, not only entry/root spans.
-        filter_server_spans: false
   resources:
     requests: { cpu: 100m, memory: 256Mi }
 
@@ -67,7 +58,6 @@ tempo:
         processors:
           - service-graphs
           - span-metrics
-          - local-blocks
 
 persistence:
   enabled: true

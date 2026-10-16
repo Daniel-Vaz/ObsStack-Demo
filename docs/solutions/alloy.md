@@ -4,7 +4,7 @@
 (and metrics too) and forwards each to the right backend - the "universal
 telemetry pipeline."
 
-> Chart: `grafana/alloy` (v1.10.0, DaemonSet) ·
+> Chart: `grafana/alloy` (v1.13.1, DaemonSet) ·
 > config: [`helm/alloy/values.yaml`](../../helm/alloy/values.yaml) ·
 > UI: `http://localhost:12345`
 

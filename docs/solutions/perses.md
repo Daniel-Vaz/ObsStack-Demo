@@ -4,7 +4,7 @@
 alternative to Grafana, with the same Mimir/Loki/Tempo/Pyroscope datasources
 underneath.
 
-> Chart: `perses/perses-operator` (0.4.0) + first-party `helm/perses` (CRDs) ·
+> Chart: `perses/perses-operator` (0.5.0) + first-party `helm/perses` (CRDs) ·
 > config: [`helm/perses/values.yaml`](../../helm/perses/values.yaml) ·
 > UI: `http://localhost:8082`
 

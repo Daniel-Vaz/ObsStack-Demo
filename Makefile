@@ -121,17 +121,17 @@ export KIND_EXPERIMENTAL_PROVIDER := podman
 # Tempo ships from the grafana-community repo; Grafana is a first-party chart
 # (helm/grafana) driven by the Grafana Operator (grafana/grafana-operator, from
 # the grafana repo) via CRDs - see docs/architecture.md.
-MIMIR_VERSION          := 6.1.0
-LOKI_VERSION           := 7.0.0
-TEMPO_VERSION          := 2.2.3
-PYROSCOPE_VERSION      := 2.1.0
-GRAFANA_OPERATOR_VERSION := 5.24.0
-PERSES_OPERATOR_VERSION := 0.4.0
-ALLOY_VERSION          := 1.10.0
-KPS_VERSION            := 87.5.1
-HEADLAMP_VERSION       := 0.43.0
-OLLAMA_VERSION         := 1.65.0
-METRICS_SERVER_VERSION := 3.13.1
+MIMIR_VERSION          := 6.2.1
+LOKI_VERSION           := 7.3.0
+TEMPO_VERSION          := 3.2.0
+PYROSCOPE_VERSION      := 2.4.0
+GRAFANA_OPERATOR_VERSION := 5.25.0
+PERSES_OPERATOR_VERSION := 0.5.0
+ALLOY_VERSION          := 1.13.1
+KPS_VERSION            := 92.9.0
+HEADLAMP_VERSION       := 0.46.0
+OLLAMA_VERSION         := 1.88.0
+METRICS_SERVER_VERSION := 3.14.0
 
 # ollama's postStart hook pulls the llama3.2:3b model (~2GB) on first start, and
 # Kubernetes doesn't mark the container "Running" (so readiness, and thus

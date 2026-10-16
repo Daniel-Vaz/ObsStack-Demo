@@ -3,7 +3,7 @@
 **In one line:** a clean, groupable dashboard for your Prometheus
 **Alertmanager** - every firing, silenced, and inhibited alert in a single view.
 
-> Chart: `helm/karma` (first-party, appVersion v0.131) ·
+> Chart: `helm/karma` (first-party, appVersion v0.133) ·
 > config: [`helm/karma/values.yaml`](../../helm/karma/values.yaml) ·
 > UI: `http://localhost:8081`
 

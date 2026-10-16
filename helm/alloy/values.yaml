@@ -24,6 +24,21 @@
 controller:
   type: daemonset
 
+# Long-lived token for Alloy's service account, which kube-prometheus-stack's
+# kubelet / kube-apiserver / CoreDNS ServiceMonitors reference as their bearer
+# credential (see helm/kube-prometheus-stack/values.yaml). Alloy's ClusterRole
+# already grants nodes/metrics and the /metrics non-resource URL, so its own
+# identity is what the scrape should authenticate as. Kubernetes fills in the
+# `token` key once the Secret exists alongside the service account.
+extraObjects:
+  - apiVersion: v1
+    kind: Secret
+    type: kubernetes.io/service-account-token
+    metadata:
+      name: alloy-scrape-token
+      annotations:
+        kubernetes.io/service-account.name: alloy
+
 # Emit a ServiceMonitor so kube-prometheus-stack's Prometheus scrapes Alloy's
 # own metrics (served on :12345/metrics).
 serviceMonitor:

@@ -45,6 +45,31 @@ prometheusOperator:
   resources:
     requests: { cpu: 50m, memory: 128Mi }
 
+# ---- Control-plane component monitors: auth ----
+# The kubelet / kube-apiserver / CoreDNS ServiceMonitors authenticate with a
+# bearer token read from a Secret (the chart dropped bearerTokenFile, and
+# Alloy's prometheus.operator.servicemonitors rejects filesystem references
+# anyway). The chart's default Secret belongs to its Prometheus service
+# account, which only exists when Prometheus is deployed - so in the default
+# METRICS_MODE=alloy point them at Alloy's own service-account token instead
+# (created by the alloy release - see helm/alloy/values.yaml extraObjects).
+# The values-prometheus-metrics.yaml overlay switches back to the chart default.
+kubeApiServer:
+  serviceMonitor:
+    authorization:
+      credentials:
+        name: alloy-scrape-token
+kubelet:
+  serviceMonitor:
+    authorization:
+      credentials:
+        name: alloy-scrape-token
+coreDns:
+  serviceMonitor:
+    authorization:
+      credentials:
+        name: alloy-scrape-token
+
 # ---- Control-plane component monitors: disabled ----
 # kind doesn't expose kube-controller-manager / scheduler / etcd / kube-proxy
 # metrics on a scrapeable interface, so these ServiceMonitors would sit

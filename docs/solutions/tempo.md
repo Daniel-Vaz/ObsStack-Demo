@@ -3,7 +3,7 @@
 **In one line:** a distributed tracing backend that's cheap enough to keep
 **every** trace, because it only needs object storage - no big index.
 
-> Chart: `grafana-community/tempo` (v2.2.3, single binary mode) ·
+> Chart: `grafana-community/tempo` (v3.2.0, single binary mode) ·
 > config: [`helm/tempo/values.yaml`](../../helm/tempo/values.yaml) ·
 > queried through Grafana at `http://localhost:3000`
 
